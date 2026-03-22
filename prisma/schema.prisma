@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum OrderType {
+  SEND_CFA
+  SEND_RUB
+}
+
+enum OrderStatus {
+  ACTIVE
+  MATCHED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentMethod {
+  ORANGE_MONEY
+  WAVE
+  BANK_TRANSFER
+  SBP
+  OTHER
+}
+
+enum TransactionStatus {
+  INITIATED
+  SENDER_SENT
+  RECEIVER_CONFIRMED
+  RUB_SENT
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESPONDED
+  RESOLVED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+}
+
+enum CountryResidence {
+  MALI
+  RUSSIA
+  OTHER
+}
+
+model User {
+  id                   Int              @id @default(autoincrement())
+  name                 String
+  email                String           @unique
+  password             String
+  phoneMali            String?
+  phoneRussia          String?
+  countryResidence     CountryResidence @default(MALI)
+  avatar               String?
+  kycStatus            KycStatus        @default(NOT_SUBMITTED)
+  isAdmin              Boolean          @default(false)
+  isBanned             Boolean          @default(false)
+  ratingAvg            Float            @default(0)
+  transactionsCount    Int              @default(0)
+  refreshToken         String?
+
+  kycDocument          KycDocument?
+  ordersCreated        Order[]
+  transactionsSent     Transaction[]    @relation("SenderTransactions")
+  transactionsReceived Transaction[]    @relation("ReceiverTransactions")
+  reviewsGiven         Review[]         @relation("ReviewerRelation")
+  reviewsReceived      Review[]         @relation("ReviewedRelation")
+  disputes             Dispute[]
+  messages             Message[]
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference?
+
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@map("users")
+}
+
+model KycDocument {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  docType     String
+  frontUrl    String
+  backUrl     String
+  selfieUrl   String
+  status      KycStatus @default(PENDING)
+  reviewedBy  Int?
+  reviewNote  String?
+  submittedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+
+  @@map("kyc_documents")
+}
+
+model Order {
+  id            Int           @id @default(autoincrement())
+  userId        Int
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          OrderType
+  amountFrom    BigInt
+  currencyFrom  String
+  amountTo      BigInt
+  currencyTo    String
+  rate          Decimal       @db.Decimal(10, 6)
+  commission    BigInt
+  paymentMethod PaymentMethod
+  phoneReceive  String
+  note          String?
+  status        OrderStatus   @default(ACTIVE)
+  expiresAt     DateTime?
+  transaction   Transaction?
+  peerTransactions Transaction[] @relation("PeerOrder")
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@map("orders")
+}
+
+model Transaction {
+  id               Int               @id @default(autoincrement())
+  orderId          Int               @unique
+  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  peerOrderId      Int?
+  peerOrder        Order?            @relation("PeerOrder", fields: [peerOrderId], references: [id], onDelete: SetNull)
+  senderId         Int
+  sender           User              @relation("SenderTransactions", fields: [senderId], references: [id])
+  receiverId       Int
+  receiver         User              @relation("ReceiverTransactions", fields: [receiverId], references: [id])
+  amountCfa        BigInt
+  amountRub        BigInt
+  rate             Decimal           @db.Decimal(10, 6)
+  commissionAmount BigInt
+  status           TransactionStatus @default(INITIATED)
+  proofUrl         String?
+  expiresAt        DateTime
+  initiatedAt      DateTime          @default(now())
+  completedAt      DateTime?
+
+  messages         Message[]
+  review           Review?
+  dispute          Dispute?
+
+  @@map("transactions")
+}
+
+model Message {
+  id              Int         @id @default(autoincrement())
+  transactionId   Int
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  senderId        Int
+  sender          User        @relation(fields: [senderId], references: [id])
+  content         String
+  type            MessageType @default(TEXT)
+  attachmentUrl   String?
+  isRead          Boolean     @default(false)
+
+  createdAt       DateTime    @default(now())
+
+  @@map("messages")
+}
+
+model Review {
+  id              Int         @id @default(autoincrement())
+  transactionId   Int         @unique
+  transaction     Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  reviewerId      Int
+  reviewer        User        @relation("ReviewerRelation", fields: [reviewerId], references: [id])
+  reviewedId      Int
+  reviewed        User        @relation("ReviewedRelation", fields: [reviewedId], references: [id])
+  rating          Int
+  comment         String?
+  /// Liste de tags (JSON), ex. `["rapide","pro"]` — MySQL n’a pas de type tableau natif
+  tags            Json?
+
+  createdAt       DateTime    @default(now())
+
+  @@map("reviews")
+}
+
+model Dispute {
+  id              Int                 @id @default(autoincrement())
+  transactionId   Int                 @unique
+  transaction     Transaction         @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  openedBy        Int
+  opener          User                @relation(fields: [openedBy], references: [id])
+  reason          String
+  description     String
+  status          DisputeStatus       @default(OPEN)
+  adminId         Int?
+  resolution      String?
+  attachments     DisputeAttachment[]
+  resolvedAt      DateTime?
+
+  createdAt       DateTime            @default(now())
+
+  @@map("disputes")
+}
+
+model DisputeAttachment {
+  id        Int      @id @default(autoincrement())
+  disputeId Int
+  dispute   Dispute  @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+  userId    Int
+  fileUrl   String
+
+  createdAt DateTime @default(now())
+
+  @@map("dispute_attachments")
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+
+  createdAt DateTime  @default(now())
+
+  @@map("notifications")
+}
+
+model ExchangeRate {
+  id           Int      @id @default(autoincrement())
+  fromCurrency String
+  toCurrency   String
+  rate         Decimal  @db.Decimal(10, 6)
+  source       String
+  fetchedAt    DateTime @default(now())
+
+  @@map("exchange_rates")
+}
+
+model NotificationPreference {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     Boolean  @default(true)
+  sms       Boolean  @default(true)
+  push      Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
