@@ -10,7 +10,7 @@ import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { KycModule } from './kyc/kyc.module';
-import { OrdersModule } from './orders/orders.module';
+import { RequestsModule } from './requests/requests.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { ChatModule } from './chat/chat.module';
 import { ReviewsModule } from './reviews/reviews.module';
@@ -18,8 +18,10 @@ import { DisputesModule } from './disputes/disputes.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RatesModule } from './rates/rates.module';
 import { AdminModule } from './admin/admin.module';
+import { OperatorModule } from './operator/operator.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HealthModule } from './health/health.module';
+import { ProofsModule } from './proofs/proofs.module';
 
 @Module({
   imports: [
@@ -39,7 +41,7 @@ import { HealthModule } from './health/health.module';
     AuthModule,
     UsersModule,
     KycModule,
-    OrdersModule,
+    RequestsModule,
     TransactionsModule,
     ChatModule,
     ReviewsModule,
@@ -47,7 +49,9 @@ import { HealthModule } from './health/health.module';
     NotificationsModule,
     RatesModule,
     AdminModule,
+    OperatorModule,
     HealthModule,
+    ProofsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

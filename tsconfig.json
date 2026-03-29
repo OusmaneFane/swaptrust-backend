@@ -20,6 +20,6 @@
     "noFallthroughCasesInSwitch": false,
     "useDefineForClassFields": false
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "prisma/**/*.ts"],
   "exclude": ["node_modules", "dist", "test"]
 }

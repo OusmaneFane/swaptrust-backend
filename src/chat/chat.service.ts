@@ -14,7 +14,7 @@ export class ChatService {
   private async assertParticipant(transactionId: number, userId: number) {
     const t = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
     if (!t) throw new NotFoundException();
-    if (t.senderId !== userId && t.receiverId !== userId) {
+    if (t.clientId !== userId && t.operatorId !== userId) {
       throw new ForbiddenException();
     }
     return t;

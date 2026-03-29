@@ -9,7 +9,6 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
-  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -21,15 +20,14 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { TransactionsService } from './transactions.service';
-import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
+import { CreateDisputeDto } from '../disputes/dto/create-dispute.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { KycVerifiedGuard } from '../common/guards/kyc-verified.guard';
 import { UploadService } from '../upload/upload.service';
 
 @ApiTags('Transactions')
 @Controller('transactions')
-@UseGuards(KycVerifiedGuard)
 export class TransactionsController {
   constructor(
     private readonly tx: TransactionsService,
@@ -37,27 +35,23 @@ export class TransactionsController {
   ) {}
 
   @Get()
+  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Historique' })
+  @ApiOperation({ summary: 'Historique (client)' })
   list(@CurrentUser('id') userId: number, @Query() q: FilterTransactionsDto) {
-    return this.tx.listForUser(userId, q);
-  }
-
-  @Post()
-  @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Initier depuis deux ordres' })
-  create(@CurrentUser('id') userId: number, @Body() dto: CreateTransactionDto) {
-    return this.tx.create(userId, dto);
+    return this.tx.listForClient(userId, q);
   }
 
   @Get(':id')
+  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Détail' })
-  one(@CurrentUser('id') userId: number, @Param('id', ParseIntPipe) id: number) {
-    return this.tx.getOne(id, userId);
+  one(@CurrentUser() user: Express.User, @Param('id', ParseIntPipe) id: number) {
+    return this.tx.getOne(id, user.id, user.role);
   }
 
-  @Post(':id/confirm-send')
+  @Post(':id/client-send')
+  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -69,28 +63,33 @@ export class TransactionsController {
   @UseInterceptors(
     FileInterceptor('proof', { storage: memoryStorage(), limits: { fileSize: 5_242_880 } }),
   )
-  @ApiOperation({ summary: 'Confirmer envoi + preuve' })
-  confirmSend(
+  @ApiOperation({ summary: 'Confirmer envoi client + reçu' })
+  clientSend(
     @CurrentUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    let proofUrl: string | null = null;
-    if (file) proofUrl = this.upload.saveFile(file, 'proofs');
-    return this.tx.confirmSend(userId, id, proofUrl);
+    const proofUrl = file ? this.upload.saveFile(file, 'proofs') : null;
+    return this.tx.clientConfirmSend(id, userId, proofUrl);
   }
 
-  @Post(':id/confirm-receive')
+  @Post(':id/client-confirm')
+  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Confirmer réception' })
-  confirmReceive(@CurrentUser('id') userId: number, @Param('id', ParseIntPipe) id: number) {
-    return this.tx.confirmReceive(userId, id);
+  @ApiOperation({ summary: 'Confirmer réception → clôture' })
+  clientConfirm(@CurrentUser('id') userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.tx.clientConfirmReceive(id, userId);
   }
 
-  @Post(':id/cancel')
+  @Post(':id/dispute')
+  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Annuler' })
-  cancel(@CurrentUser('id') userId: number, @Param('id', ParseIntPipe) id: number) {
-    return this.tx.cancel(userId, id);
+  @ApiOperation({ summary: 'Ouvrir un litige' })
+  openDispute(
+    @CurrentUser('id') userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateDisputeDto,
+  ) {
+    return this.tx.openDispute(id, userId, dto);
   }
 }

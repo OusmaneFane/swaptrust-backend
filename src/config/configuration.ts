@@ -7,6 +7,13 @@ export default () => ({
     host: process.env.REDIS_HOST ?? 'localhost',
     port: parseInt(process.env.REDIS_PORT ?? '6379', 10),
   },
+  rates: {
+    cacheTtlSeconds: parseInt(process.env.RATE_CACHE_TTL ?? '300', 10),
+    cronInterval: process.env.RATE_CRON_INTERVAL ?? '*/5 * * * *',
+    /** 1 XOF ≈ 0,14 RUB (ordre de grandeur si Google/DB indisponibles) */
+    fallbackRate: parseFloat(process.env.RATE_FALLBACK ?? '0.143'),
+    spreadPercent: parseFloat(process.env.RATE_SPREAD ?? process.env.EXCHANGE_SPREAD_PERCENT ?? '1'),
+  },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,

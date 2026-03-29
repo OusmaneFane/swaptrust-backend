@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -25,9 +26,9 @@ export class AuthService {
     private sms: SmsService,
   ) {}
 
-  private async signAccessToken(userId: number) {
+  private async signAccessToken(userId: number, role: UserRole) {
     return this.jwt.signAsync(
-      { sub: userId },
+      { sub: userId, role },
       {
         secret: this.config.get<string>('jwt.accessSecret'),
         expiresIn: this.config.get<string>('jwt.accessExpires') as `${number}m` | `${number}d`,
@@ -64,7 +65,7 @@ export class AuthService {
       where: { id: user.id },
       data: { refreshToken },
     });
-    const accessToken = await this.signAccessToken(user.id);
+    const accessToken = await this.signAccessToken(user.id, user.role);
     return { accessToken, refreshToken };
   }
 
@@ -79,7 +80,7 @@ export class AuthService {
       where: { id: user.id },
       data: { refreshToken },
     });
-    const accessToken = await this.signAccessToken(user.id);
+    const accessToken = await this.signAccessToken(user.id, user.role);
     return { accessToken, refreshToken };
   }
 
@@ -101,7 +102,7 @@ export class AuthService {
       where: { id: user.id },
       data: { refreshToken: newRefresh },
     });
-    const accessToken = await this.signAccessToken(user.id);
+    const accessToken = await this.signAccessToken(user.id, user.role);
     return { accessToken, refreshToken: newRefresh };
   }
 
@@ -145,7 +146,7 @@ export class AuthService {
         countryResidence: true,
         avatar: true,
         kycStatus: true,
-        isAdmin: true,
+        role: true,
         ratingAvg: true,
         transactionsCount: true,
         createdAt: true,

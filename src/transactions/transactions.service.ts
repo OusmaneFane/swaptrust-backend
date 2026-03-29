@@ -4,24 +4,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  OrderStatus,
-  OrderType,
-  TransactionStatus,
-  Prisma,
-} from '@prisma/client';
+import { Prisma, RequestStatus, TransactionStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { MatchingService } from '../orders/matching.service';
-import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
+import { CreateDisputeDto } from '../disputes/dto/create-dispute.dto';
 
-const HOURS_48 = 48 * 60 * 60 * 1000;
+const HOURS_24 = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class TransactionsService {
   constructor(
-    private prisma: PrismaService,
-    private matching: MatchingService,
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private periodStart(period?: string) {
@@ -30,186 +25,151 @@ export class TransactionsService {
     return undefined;
   }
 
-  async listForUser(userId: number, q: FilterTransactionsDto) {
+  async listForClient(clientId: number, q: FilterTransactionsDto) {
     const since = this.periodStart(q.period);
-    const base: Prisma.TransactionWhereInput = {};
-    if (since) base.initiatedAt = { gte: since };
-    if (q.status) base.status = q.status;
-
-    if (q.direction === 'sent') {
-      base.senderId = userId;
-    } else if (q.direction === 'received') {
-      base.receiverId = userId;
-    } else {
-      base.OR = [{ senderId: userId }, { receiverId: userId }];
-    }
+    const where: Prisma.TransactionWhereInput = { clientId };
+    if (since) where.createdAt = { gte: since };
+    if (q.status) where.status = q.status;
 
     return this.prisma.transaction.findMany({
-      where: base,
-      orderBy: { initiatedAt: 'desc' },
+      where,
+      orderBy: { createdAt: 'desc' },
       include: {
-        order: true,
-        sender: { select: { id: true, name: true, avatar: true } },
-        receiver: { select: { id: true, name: true, avatar: true } },
+        request: true,
+        operator: { select: { id: true, name: true, avatar: true } },
       },
     });
   }
 
-  async create(userId: number, dto: CreateTransactionDto) {
-    const [mine, peer] = await Promise.all([
-      this.prisma.order.findUnique({
-        where: { id: dto.myOrderId },
-        include: { transaction: true },
-      }),
-      this.prisma.order.findUnique({
-        where: { id: dto.peerOrderId },
-        include: { transaction: true },
-      }),
-    ]);
-    if (!mine || !peer) throw new NotFoundException('Order not found');
-    if (mine.userId !== userId) throw new ForbiddenException();
-    if (mine.status !== OrderStatus.ACTIVE || peer.status !== OrderStatus.ACTIVE) {
-      throw new BadRequestException('Orders must be active');
-    }
-    if (mine.type === peer.type) throw new BadRequestException('Order types must differ');
-
-    const matches = await this.matching.findMatches(mine.id);
-    const ok = matches.some((m) => m.id === peer.id);
-    if (!ok) throw new BadRequestException('Orders are not compatible');
-
-    if (peer.transaction || mine.transaction) {
-      throw new BadRequestException('Order already matched');
-    }
-
-    const sendCfa =
-      mine.type === OrderType.SEND_CFA ? mine : peer.type === OrderType.SEND_CFA ? peer : null;
-    const sendRub =
-      mine.type === OrderType.SEND_RUB ? mine : peer.type === OrderType.SEND_RUB ? peer : null;
-    if (!sendCfa || !sendRub) throw new BadRequestException('Invalid pair');
-
-    const senderId = sendCfa.userId;
-    const receiverId = sendRub.userId;
-
-    const tx = await this.prisma.$transaction(async (db) => {
-      const t = await db.transaction.create({
-        data: {
-          orderId: mine.id,
-          peerOrderId: peer.id,
-          senderId,
-          receiverId,
-          amountCfa: sendCfa.amountFrom,
-          amountRub: sendRub.amountFrom,
-          rate: sendCfa.rate,
-          commissionAmount: sendCfa.commission + sendRub.commission,
-          status: TransactionStatus.INITIATED,
-          expiresAt: new Date(Date.now() + HOURS_48),
-        },
-      });
-      await db.order.update({
-        where: { id: mine.id },
-        data: { status: OrderStatus.MATCHED },
-      });
-      await db.order.update({
-        where: { id: peer.id },
-        data: { status: OrderStatus.MATCHED },
-      });
-      return t;
-    });
-
-    return this.getOne(tx.id, userId);
-  }
-
-  async getOne(id: number, userId: number) {
+  async getOne(id: number, userId: number, role?: UserRole) {
+    const staff = role === UserRole.ADMIN || role === UserRole.OPERATOR;
     const t = await this.prisma.transaction.findUnique({
       where: { id },
       include: {
-        order: true,
-        sender: { select: { id: true, name: true, email: true, avatar: true } },
-        receiver: { select: { id: true, name: true, email: true, avatar: true } },
+        request: true,
+        client: { select: { id: true, name: true, email: true, avatar: true } },
+        operator: { select: { id: true, name: true, email: true, avatar: true, role: true } },
         messages: { take: 50, orderBy: { createdAt: 'desc' } },
         dispute: true,
         review: true,
+        ...(staff
+          ? { operatorLogs: { orderBy: { createdAt: 'asc' } } }
+          : {}),
       },
     });
     if (!t) throw new NotFoundException();
-    if (t.senderId !== userId && t.receiverId !== userId) throw new ForbiddenException();
+    if (!staff && t.clientId !== userId) throw new ForbiddenException();
+    if (staff && role === UserRole.OPERATOR && t.operatorId !== userId) {
+      throw new ForbiddenException();
+    }
     return t;
   }
 
-  async confirmSend(userId: number, id: number, proofUrl: string | null) {
-    const t = await this.prisma.transaction.findUnique({ where: { id } });
-    if (!t) throw new NotFoundException();
-    if (t.senderId !== userId) throw new ForbiddenException();
-    if (t.status !== TransactionStatus.INITIATED) {
-      throw new BadRequestException('Invalid status');
-    }
-    return this.prisma.transaction.update({
-      where: { id },
-      data: { status: TransactionStatus.SENDER_SENT, proofUrl: proofUrl ?? undefined },
+  async clientConfirmSend(transactionId: number, clientId: number, proofUrl: string | null) {
+    const t = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, clientId, status: TransactionStatus.INITIATED },
     });
+    if (!t) throw new NotFoundException();
+
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: {
+        status: TransactionStatus.CLIENT_SENT,
+        clientProofUrl: proofUrl ?? undefined,
+        clientSentAt: new Date(),
+      },
+    });
+
+    await this.notifications.notify(t.operatorId, {
+      type: 'CLIENT_PROOF_UPLOADED',
+      title: 'Reçu client uploadé',
+      body: 'Le client a envoyé ses fonds et uploadé son reçu. Vérifiez et envoyez en retour.',
+      data: { transactionId },
+    });
+
+    return this.getOne(transactionId, clientId, UserRole.CLIENT);
   }
 
-  async confirmReceive(userId: number, id: number) {
-    const t = await this.prisma.transaction.findUnique({ where: { id } });
+  async clientConfirmReceive(transactionId: number, clientId: number) {
+    const t = await this.prisma.transaction.findFirst({
+      where: { id: transactionId, clientId, status: TransactionStatus.OPERATOR_SENT },
+    });
     if (!t) throw new NotFoundException();
-    if (t.receiverId !== userId) throw new ForbiddenException();
-    if (t.status !== TransactionStatus.SENDER_SENT) {
-      throw new BadRequestException('Invalid status');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: { status: TransactionStatus.COMPLETED, completedAt: new Date() },
+      });
+      await tx.exchangeRequest.update({
+        where: { id: t.requestId },
+        data: { status: RequestStatus.COMPLETED },
+      });
+      await tx.user.updateMany({
+        where: { id: { in: [clientId, t.operatorId] } },
+        data: { transactionsCount: { increment: 1 } },
+      });
+    });
+
+    await this.notifications.notify(t.operatorId, {
+      type: 'TRANSACTION_COMPLETED',
+      title: 'Transaction clôturée',
+      body: 'Le client a confirmé la réception. Échange terminé avec succès.',
+      data: { transactionId },
+    });
+
+    return this.getOne(transactionId, clientId, UserRole.CLIENT);
+  }
+
+  async openDispute(transactionId: number, userId: number, dto: CreateDisputeDto) {
+    const t = await this.prisma.transaction.findFirst({
+      where: {
+        id: transactionId,
+        OR: [{ clientId: userId }, { operatorId: userId }],
+      },
+    });
+    if (!t) throw new NotFoundException();
+    if (
+      t.status === TransactionStatus.CANCELLED ||
+      t.status === TransactionStatus.COMPLETED
+    ) {
+      throw new BadRequestException('Transaction non éligible au litige');
     }
-    return this.prisma.$transaction(async (db) => {
-      const updated = await db.transaction.update({
-        where: { id },
+    const existing = await this.prisma.dispute.findUnique({ where: { transactionId } });
+    if (existing) throw new BadRequestException('Un litige existe déjà');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.dispute.create({
         data: {
-          status: TransactionStatus.COMPLETED,
-          completedAt: new Date(),
+          transactionId,
+          openedBy: userId,
+          reason: dto.reason,
+          description: dto.description,
         },
       });
-      await db.order.update({
-        where: { id: t.orderId },
-        data: { status: OrderStatus.COMPLETED },
+      await tx.transaction.update({
+        where: { id: transactionId },
+        data: { status: TransactionStatus.DISPUTED },
       });
-      if (t.peerOrderId) {
-        await db.order.update({
-          where: { id: t.peerOrderId },
-          data: { status: OrderStatus.COMPLETED },
-        });
-      }
-      await db.user.update({
-        where: { id: t.senderId },
-        data: { transactionsCount: { increment: 1 } },
-      });
-      await db.user.update({
-        where: { id: t.receiverId },
-        data: { transactionsCount: { increment: 1 } },
-      });
-      return updated;
     });
-  }
 
-  async cancel(userId: number, id: number) {
-    const t = await this.prisma.transaction.findUnique({
-      where: { id },
-      include: { order: true },
+    const admins = await this.prisma.user.findMany({
+      where: { role: UserRole.ADMIN },
+      select: { id: true },
     });
-    if (!t) throw new NotFoundException();
-    if (t.senderId !== userId && t.receiverId !== userId) throw new ForbiddenException();
-    if (
-      t.status === TransactionStatus.COMPLETED ||
-      t.status === TransactionStatus.CANCELLED
-    ) {
-      throw new BadRequestException('Cannot cancel');
-    }
-    return this.prisma.$transaction(async (db) => {
-      await db.transaction.update({
-        where: { id },
-        data: { status: TransactionStatus.CANCELLED },
-      });
-      const ids = [t.orderId, t.peerOrderId].filter((x): x is number => x != null);
-      await db.order.updateMany({
-        where: { id: { in: ids } },
-        data: { status: OrderStatus.ACTIVE },
-      });
-      return { cancelled: true };
-    });
+    await Promise.all(
+      admins.map((a) =>
+        this.notifications.notify(a.id, {
+          type: 'DISPUTE_OPENED',
+          title: 'Nouveau litige',
+          body: `Litige sur la transaction #${transactionId}`,
+          data: { transactionId },
+        }),
+      ),
+    );
+
+    const role =
+      t.clientId === userId ? UserRole.CLIENT : UserRole.OPERATOR;
+    return this.getOne(transactionId, userId, role);
   }
 }

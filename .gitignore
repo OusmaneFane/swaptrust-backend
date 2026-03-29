@@ -3,6 +3,10 @@
 /node_modules
 /build
 
+# Ne pas committer de prisma.config.js à la racine : le CLI Prisma le préfère à
+# prisma.config.ts et l’interop CJS ajoute __esModule, ce qui casse le parseur.
+/prisma.config.js
+
 # Logs
 logs
 *.log

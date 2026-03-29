@@ -20,6 +20,7 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
 import { DisputesService } from './disputes.service';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -67,10 +68,10 @@ export class DisputesController {
   @ApiOperation({ summary: 'Détail litige' })
   one(
     @CurrentUser('id') userId: number,
-    @CurrentUser('isAdmin') isAdmin: boolean,
+    @CurrentUser('role') role: UserRole,
     @Param('id', ParseIntPipe) id: number,
   ) {
-    return this.disputes.getOne(id, userId, !!isAdmin);
+    return this.disputes.getOne(id, userId, role);
   }
 
   @Post(':id/respond')

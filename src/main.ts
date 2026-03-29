@@ -53,7 +53,7 @@ async function bootstrap() {
     .addTag('Auth')
     .addTag('Users')
     .addTag('KYC')
-    .addTag('Orders')
+    .addTag('Requests')
     .addTag('Transactions')
     .addTag('Chat')
     .addTag('Reviews')
@@ -61,7 +61,9 @@ async function bootstrap() {
     .addTag('Notifications')
     .addTag('Rates')
     .addTag('Admin')
+    .addTag('Operator')
     .addTag('Health')
+    .addTag('Proofs')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

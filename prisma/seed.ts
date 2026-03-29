@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient, CountryResidence, KycStatus } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import bcrypt from 'bcryptjs';
 import { mysqlConnectionUrl } from '../src/prisma/mysql-connection-url';
@@ -21,14 +21,14 @@ async function main() {
       email: 'admin@swaptrust.local',
       name: 'Admin SwapTrust',
       password,
-      countryResidence: CountryResidence.MALI,
-      kycStatus: KycStatus.VERIFIED,
-      isAdmin: true,
-    },
+      countryResidence: 'MALI',
+      kycStatus: 'VERIFIED',
+      role: 'ADMIN',
+    } as any,
     update: {
-      isAdmin: true,
-      kycStatus: KycStatus.VERIFIED,
-    },
+      role: 'ADMIN',
+      kycStatus: 'VERIFIED',
+    } as any,
   });
 
   const userPass = await bcrypt.hash('UserDemo123!', 12);
@@ -39,13 +39,31 @@ async function main() {
       name: 'Demo User',
       password: userPass,
       phoneMali: '+22370123456',
-      countryResidence: CountryResidence.RUSSIA,
-      kycStatus: KycStatus.VERIFIED,
-    },
+      countryResidence: 'RUSSIA',
+      kycStatus: 'VERIFIED',
+    } as any,
     update: {},
   });
 
+  const opPass = await bcrypt.hash('OperatorSwapTrust123!', 12);
+  await prisma.user.upsert({
+    where: { email: 'operator@swaptrust.local' },
+    create: {
+      email: 'operator@swaptrust.local',
+      name: 'Operator Demo',
+      password: opPass,
+      countryResidence: 'MALI',
+      kycStatus: 'VERIFIED',
+      role: 'OPERATOR',
+    } as any,
+    update: {
+      role: 'OPERATOR',
+      kycStatus: 'VERIFIED',
+    } as any,
+  });
+
   console.log('Seed OK: admin@swaptrust.local / AdminSwapTrust123!');
+  console.log('Seed OK: operator@swaptrust.local / OperatorSwapTrust123!');
 }
 
 main()

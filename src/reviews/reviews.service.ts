@@ -19,10 +19,10 @@ export class ReviewsService {
     if (t.status !== TransactionStatus.COMPLETED) {
       throw new BadRequestException('Transaction not completed');
     }
-    if (t.senderId !== reviewerId && t.receiverId !== reviewerId) {
+    if (t.clientId !== reviewerId && t.operatorId !== reviewerId) {
       throw new ForbiddenException();
     }
-    const reviewedId = t.senderId === reviewerId ? t.receiverId : t.senderId;
+    const reviewedId = t.clientId === reviewerId ? t.operatorId : t.clientId;
     const existing = await this.prisma.review.findUnique({ where: { transactionId } });
     if (existing) throw new ConflictException('Review already exists');
 

@@ -1,20 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { RatesService } from './rates.service';
 
 @Injectable()
-export class RatesScheduler {
+export class RatesScheduler implements OnApplicationBootstrap {
   private readonly logger = new Logger(RatesScheduler.name);
 
   constructor(private readonly ratesService: RatesService) {}
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  async onApplicationBootstrap() {
+    this.logger.log('Pré-chauffe du cache des taux…');
+    await this.ratesService.fetchAndStore();
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async updateRates() {
-    try {
-      await this.ratesService.fetchAndStore();
-      this.logger.log('Exchange rates updated');
-    } catch (err) {
-      this.logger.error('Rate update failed', err);
-    }
+    this.logger.debug('Mise à jour planifiée du taux XOF/RUB…');
+    await this.ratesService.fetchAndStore();
   }
 }

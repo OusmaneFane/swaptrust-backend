@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DisputeStatus, TransactionStatus } from '@prisma/client';
+import { DisputeStatus, TransactionStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UploadService } from '../upload/upload.service';
 
@@ -14,12 +15,17 @@ export class DisputesService {
   constructor(
     private prisma: PrismaService,
     private upload: UploadService,
+    private notifications: NotificationsService,
   ) {}
+
+  private isParty(t: { clientId: number; operatorId: number }, userId: number) {
+    return t.clientId === userId || t.operatorId === userId;
+  }
 
   async open(transactionId: number, userId: number, dto: CreateDisputeDto) {
     const t = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
     if (!t) throw new NotFoundException();
-    if (t.senderId !== userId && t.receiverId !== userId) throw new ForbiddenException();
+    if (!this.isParty(t, userId)) throw new ForbiddenException();
     if (t.status === TransactionStatus.CANCELLED) {
       throw new BadRequestException('Invalid transaction');
     }
@@ -41,10 +47,26 @@ export class DisputesService {
       });
       return dispute;
     });
+
+    const admins = await this.prisma.user.findMany({
+      where: { role: UserRole.ADMIN },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((a) =>
+        this.notifications.notify(a.id, {
+          type: 'DISPUTE_OPENED',
+          title: 'Nouveau litige',
+          body: `Litige sur la transaction #${transactionId}`,
+          data: { transactionId },
+        }),
+      ),
+    );
+
     return d;
   }
 
-  async getOne(id: number, userId: number, isAdmin: boolean) {
+  async getOne(id: number, userId: number, role: UserRole) {
     const d = await this.prisma.dispute.findUnique({
       where: { id },
       include: {
@@ -55,7 +77,12 @@ export class DisputesService {
     });
     if (!d) throw new NotFoundException();
     const t = d.transaction;
-    if (!isAdmin && t.senderId !== userId && t.receiverId !== userId && d.openedBy !== userId) {
+    const staff = role === UserRole.ADMIN || role === UserRole.OPERATOR;
+    if (
+      !staff &&
+      !this.isParty(t, userId) &&
+      d.openedBy !== userId
+    ) {
       throw new ForbiddenException();
     }
     return d;
@@ -68,7 +95,7 @@ export class DisputesService {
     });
     if (!d) throw new NotFoundException();
     const t = d.transaction;
-    if (t.senderId !== userId && t.receiverId !== userId) throw new ForbiddenException();
+    if (!this.isParty(t, userId)) throw new ForbiddenException();
     if (d.status !== DisputeStatus.OPEN) throw new BadRequestException();
     return this.prisma.dispute.update({
       where: { id },
@@ -86,7 +113,7 @@ export class DisputesService {
     });
     if (!d) throw new NotFoundException();
     const t = d.transaction;
-    if (t.senderId !== userId && t.receiverId !== userId) throw new ForbiddenException();
+    if (!this.isParty(t, userId)) throw new ForbiddenException();
     const url = this.upload.saveFile(file, 'disputes');
     return this.prisma.disputeAttachment.create({
       data: { disputeId: id, userId, fileUrl: url },

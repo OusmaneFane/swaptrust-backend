@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
-import { Prisma } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 
@@ -35,6 +35,33 @@ export class NotificationsService {
     return this.prisma.notification.create({
       data: { userId, type, title, body, data },
     });
+  }
+
+  async notify(
+    userId: number,
+    payload: {
+      type: string;
+      title: string;
+      body: string;
+      data?: Prisma.InputJsonValue;
+    },
+  ) {
+    return this.createInApp(userId, payload.type, payload.title, payload.body, payload.data);
+  }
+
+  async notifyOperators(payload: {
+    type: string;
+    title: string;
+    body: string;
+    data?: Prisma.InputJsonValue;
+  }) {
+    const staff = await this.prisma.user.findMany({
+      where: { role: { in: [UserRole.OPERATOR, UserRole.ADMIN] } },
+      select: { id: true },
+    });
+    await Promise.all(
+      staff.map((u) => this.createInApp(u.id, payload.type, payload.title, payload.body, payload.data)),
+    );
   }
 
   async notifyEmail(userEmail: string, subject: string, text: string) {

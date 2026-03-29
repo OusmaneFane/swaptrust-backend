@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   DisputeStatus,
   KycStatus,
-  OrderStatus,
+  RequestStatus,
   TransactionStatus,
+  UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -17,7 +18,7 @@ export class AdminService {
       kycPending,
       txActive,
       disputesOpen,
-      ordersActive,
+      requestsPending,
     ] = await Promise.all([
       this.prisma.user.count(),
       this.prisma.kycDocument.count({ where: { status: KycStatus.PENDING } }),
@@ -26,17 +27,19 @@ export class AdminService {
           status: {
             in: [
               TransactionStatus.INITIATED,
-              TransactionStatus.SENDER_SENT,
-              TransactionStatus.RECEIVER_CONFIRMED,
-              TransactionStatus.RUB_SENT,
+              TransactionStatus.CLIENT_SENT,
+              TransactionStatus.OPERATOR_VERIFIED,
+              TransactionStatus.OPERATOR_SENT,
             ],
           },
         },
       }),
       this.prisma.dispute.count({ where: { status: DisputeStatus.OPEN } }),
-      this.prisma.order.count({ where: { status: OrderStatus.ACTIVE } }),
+      this.prisma.exchangeRequest.count({
+        where: { status: RequestStatus.PENDING, expiresAt: { gt: new Date() } },
+      }),
     ]);
-    return { users, kycPending, txActive, disputesOpen, ordersActive };
+    return { users, kycPending, txActive, disputesOpen, requestsPending };
   }
 
   async users(search?: string) {
@@ -58,7 +61,7 @@ export class AdminService {
         name: true,
         kycStatus: true,
         isBanned: true,
-        isAdmin: true,
+        role: true,
         createdAt: true,
       },
     });
@@ -73,11 +76,12 @@ export class AdminService {
 
   async transactions() {
     return this.prisma.transaction.findMany({
-      orderBy: { initiatedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       take: 200,
       include: {
-        sender: { select: { id: true, email: true, name: true } },
-        receiver: { select: { id: true, email: true, name: true } },
+        request: true,
+        client: { select: { id: true, email: true, name: true } },
+        operator: { select: { id: true, email: true, name: true } },
       },
     });
   }
@@ -90,10 +94,13 @@ export class AdminService {
   }
 
   async resolveDispute(adminId: number, id: number, resolution: string) {
-    const d = await this.prisma.dispute.findUnique({ where: { id } });
-    if (!d) throw new Error('Not found');
-    await this.prisma.$transaction([
-      this.prisma.dispute.update({
+    const d = await this.prisma.dispute.findUnique({
+      where: { id },
+      include: { transaction: true },
+    });
+    if (!d) throw new NotFoundException();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.dispute.update({
         where: { id },
         data: {
           status: DisputeStatus.RESOLVED,
@@ -101,12 +108,16 @@ export class AdminService {
           resolution,
           resolvedAt: new Date(),
         },
-      }),
-      this.prisma.transaction.update({
+      });
+      await tx.transaction.update({
         where: { id: d.transactionId },
-        data: { status: TransactionStatus.COMPLETED },
-      }),
-    ]);
+        data: { status: TransactionStatus.COMPLETED, completedAt: new Date() },
+      });
+      await tx.exchangeRequest.update({
+        where: { id: d.transaction.requestId },
+        data: { status: RequestStatus.COMPLETED },
+      });
+    });
     return { resolved: true };
   }
 
@@ -114,6 +125,43 @@ export class AdminService {
     return this.prisma.kycDocument.findMany({
       where: { status: KycStatus.PENDING },
       include: { user: { select: { id: true, email: true, name: true } } },
+    });
+  }
+
+  async assignRole(userId: number, role: UserRole) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { role },
+      select: { id: true, email: true, name: true, role: true },
+    });
+  }
+
+  async listOperators() {
+    return this.prisma.user.findMany({
+      where: { role: UserRole.OPERATOR },
+      select: { id: true, email: true, name: true, createdAt: true },
+      orderBy: { id: 'desc' },
+    });
+  }
+
+  async listAllRequests() {
+    return this.prisma.exchangeRequest.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      include: {
+        client: { select: { id: true, email: true, name: true } },
+        transaction: { include: { operator: { select: { id: true, name: true } } } },
+      },
+    });
+  }
+
+  async listPendingRequests() {
+    return this.prisma.exchangeRequest.findMany({
+      where: { status: RequestStatus.PENDING, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        client: { select: { id: true, email: true, name: true, phoneMali: true } },
+      },
     });
   }
 }

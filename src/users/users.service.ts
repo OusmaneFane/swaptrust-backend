@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { maskPhone } from '../common/utils/mask-phone';
@@ -27,7 +28,7 @@ export class UsersService {
           name: true,
           email: true,
           kycStatus: true,
-          isAdmin: true,
+          role: true,
           isBanned: true,
           ratingAvg: true,
           createdAt: true,
@@ -111,7 +112,7 @@ export class UsersService {
   async assertAdminView(userId: number, targetId: number) {
     if (userId !== targetId) {
       const u = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!u?.isAdmin) throw new ForbiddenException();
+      if (u?.role !== UserRole.ADMIN) throw new ForbiddenException();
     }
   }
 }

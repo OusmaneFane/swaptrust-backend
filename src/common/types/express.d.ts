@@ -1,4 +1,4 @@
-import { CountryResidence, KycStatus } from '@prisma/client';
+import { CountryResidence, KycStatus, UserRole } from '@prisma/client';
 
 declare global {
   namespace Express {
@@ -6,7 +6,7 @@ declare global {
       id: number;
       email: string;
       name: string;
-      isAdmin: boolean;
+      role: UserRole;
       isBanned: boolean;
       kycStatus: KycStatus;
       countryResidence: CountryResidence;

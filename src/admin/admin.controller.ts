@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Put,
+  Delete,
   Param,
   Body,
   Query,
@@ -9,8 +10,10 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { AssignRoleDto } from './dto/assign-role.dto';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -37,6 +40,36 @@ export class AdminController {
   @ApiOperation({ summary: 'Bannir' })
   ban(@Param('id', ParseIntPipe) id: number) {
     return this.admin.banUser(id);
+  }
+
+  @Put('users/:id/role')
+  @ApiOperation({ summary: '[Admin] Assigner un rôle' })
+  assignRole(@Param('id', ParseIntPipe) id: number, @Body() dto: AssignRoleDto) {
+    return this.admin.assignRole(id, dto.role);
+  }
+
+  @Get('operators')
+  @ApiOperation({ summary: '[Admin] Lister les opérateurs' })
+  listOperators() {
+    return this.admin.listOperators();
+  }
+
+  @Get('requests/pending')
+  @ApiOperation({ summary: 'Demandes non prises en charge' })
+  requestsPending() {
+    return this.admin.listPendingRequests();
+  }
+
+  @Get('requests')
+  @ApiOperation({ summary: 'Toutes les demandes' })
+  requestsAll() {
+    return this.admin.listAllRequests();
+  }
+
+  @Delete('operators/:id')
+  @ApiOperation({ summary: '[Admin] Révoquer le rôle opérateur' })
+  revokeOperator(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.assignRole(id, UserRole.CLIENT);
   }
 
   @Get('transactions')
