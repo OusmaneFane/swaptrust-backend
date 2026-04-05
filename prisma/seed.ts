@@ -80,7 +80,8 @@ async function main() {
     {
       method: PaymentMethod.BANK_TRANSFER,
       accountNumber: process.env.SWAPTRUST_BANK_IBAN || 'ML00XXXXXXXXXXXX',
-      accountName: process.env.SWAPTRUST_BANK_NAME || 'SwapTrust — Virement BHM',
+      accountName:
+        process.env.SWAPTRUST_BANK_NAME || 'SwapTrust — Virement BHM',
     },
   ];
 
