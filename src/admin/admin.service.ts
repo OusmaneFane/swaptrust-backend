@@ -1,16 +1,24 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   DisputeStatus,
   KycStatus,
   RequestStatus,
+  RequestType,
   TransactionStatus,
   UserRole,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreatePlatformAccountDto } from './dto/create-platform-account.dto';
+import { UpdatePlatformAccountDto } from './dto/update-platform-account.dto';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly whatsapp: WhatsappService,
+  ) {}
 
   async dashboard() {
     const [
@@ -80,6 +88,7 @@ export class AdminService {
       take: 200,
       include: {
         request: true,
+        platformAccount: true,
         client: { select: { id: true, email: true, name: true } },
         operator: { select: { id: true, email: true, name: true } },
       },
@@ -96,7 +105,13 @@ export class AdminService {
   async resolveDispute(adminId: number, id: number, resolution: string) {
     const d = await this.prisma.dispute.findUnique({
       where: { id },
-      include: { transaction: true },
+      include: {
+        transaction: {
+          include: {
+            client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+          },
+        },
+      },
     });
     if (!d) throw new NotFoundException();
     await this.prisma.$transaction(async (tx) => {
@@ -118,6 +133,16 @@ export class AdminService {
         data: { status: RequestStatus.COMPLETED },
       });
     });
+
+    const c = d.transaction.client;
+    void this.whatsapp
+      .sendDisputeResolved({
+        user: { name: c.name, phone: clientWhatsappPhone(c) },
+        transactionId: d.transactionId,
+        resolution,
+      })
+      .catch(() => {});
+
     return { resolved: true };
   }
 
@@ -163,5 +188,103 @@ export class AdminService {
         client: { select: { id: true, email: true, name: true, phoneMali: true } },
       },
     });
+  }
+
+  async listPlatformAccounts() {
+    return this.prisma.platformAccount.findMany({ orderBy: [{ method: 'asc' }, { id: 'asc' }] });
+  }
+
+  async createPlatformAccount(dto: CreatePlatformAccountDto) {
+    return this.prisma.platformAccount.create({
+      data: {
+        method: dto.method,
+        accountNumber: dto.accountNumber,
+        accountName: dto.accountName,
+        isActive: dto.isActive ?? true,
+      },
+    });
+  }
+
+  async updatePlatformAccount(id: number, dto: UpdatePlatformAccountDto) {
+    try {
+      return await this.prisma.platformAccount.update({
+        where: { id },
+        data: dto,
+      });
+    } catch {
+      throw new NotFoundException();
+    }
+  }
+
+  async deactivatePlatformAccount(id: number) {
+    try {
+      return await this.prisma.platformAccount.update({
+        where: { id },
+        data: { isActive: false },
+      });
+    } catch {
+      throw new NotFoundException();
+    }
+  }
+
+  private revenuePeriodStart(period: string): Date | undefined {
+    const now = Date.now();
+    if (period === 'day') return new Date(now - 24 * 60 * 60 * 1000);
+    if (period === 'week') return new Date(now - 7 * 24 * 60 * 60 * 1000);
+    if (period === 'month') return new Date(now - 30 * 24 * 60 * 60 * 1000);
+    if (period === 'year') return new Date(now - 365 * 24 * 60 * 60 * 1000);
+    throw new BadRequestException('period doit être day, week, month ou year');
+  }
+
+  /**
+   * Volume / commissions en centimes CFA pour les transactions NEED_RUB (client envoie du CFA).
+   */
+  async revenueSummary(period: string) {
+    const since = this.revenuePeriodStart(period);
+    const txs = await this.prisma.transaction.findMany({
+      where: {
+        status: TransactionStatus.COMPLETED,
+        completedAt: { gte: since },
+      },
+      include: { request: { select: { type: true } } },
+    });
+
+    let totalVolumeCfa = BigInt(0);
+    let totalCommissionCfa = BigInt(0);
+    for (const tx of txs) {
+      if (tx.request.type !== RequestType.NEED_RUB) continue;
+      const gross = tx.grossAmount ?? tx.amountCfa;
+      const net = tx.netAmount ?? gross - tx.commissionAmount;
+      totalVolumeCfa += net;
+      totalCommissionCfa += tx.commissionAmount;
+    }
+
+    const pending = await this.prisma.transaction.findMany({
+      where: {
+        status: TransactionStatus.CLIENT_SENT,
+        platformTransferredAt: null,
+      },
+      select: {
+        netAmount: true,
+        grossAmount: true,
+        commissionAmount: true,
+        amountCfa: true,
+      },
+    });
+
+    let pendingAmount = BigInt(0);
+    for (const p of pending) {
+      const gross = p.grossAmount ?? p.amountCfa;
+      pendingAmount += p.netAmount ?? gross - p.commissionAmount;
+    }
+
+    return {
+      period,
+      transactionCount: txs.filter((t) => t.request.type === RequestType.NEED_RUB).length,
+      totalVolumeCfa: totalVolumeCfa.toString(),
+      totalCommissionCfa: totalCommissionCfa.toString(),
+      pendingTransfers: pending.length,
+      pendingAmount: pendingAmount.toString(),
+    };
   }
 }

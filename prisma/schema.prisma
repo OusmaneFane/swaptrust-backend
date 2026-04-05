@@ -118,6 +118,19 @@ model KycDocument {
   @@map("kyc_documents")
 }
 
+model PlatformAccount {
+  id            Int           @id @default(autoincrement())
+  method        PaymentMethod
+  accountNumber String
+  accountName   String
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+
+  transactions Transaction[]
+
+  @@map("platform_accounts")
+}
+
 model ExchangeRequest {
   id               Int           @id @default(autoincrement())
   clientId         Int
@@ -127,6 +140,7 @@ model ExchangeRequest {
   currencyWanted   String
   amountToSend     BigInt
   currencyToSend   String
+  /// Taux Google XOF→RUB (sans spread) au moment de la demande — affichage transparent
   rateAtRequest    Decimal       @db.Decimal(10, 6)
   commissionAmount BigInt
   paymentMethod    PaymentMethod
@@ -156,11 +170,25 @@ model Transaction {
   rate             Decimal           @db.Decimal(10, 6)
   commissionAmount BigInt
 
+  /// Montant brut envoyé par le client sur le compte SwapTrust (devise d’envoi)
+  grossAmount       BigInt?
+  /// Montant net reversé à l’opérateur après commission
+  netAmount         BigInt?
+  commissionPercent Decimal?          @db.Decimal(5, 2)
+  /// Taux Google XOF→RUB (1 XOF = googleRate RUB)
+  googleRate        Decimal?          @db.Decimal(10, 6)
+
+  platformAccountId          Int?
+  platformAccount            PlatformAccount? @relation(fields: [platformAccountId], references: [id])
+  platformToOperatorProofUrl   String?
+  platformTransferredAt      DateTime?
+
   status TransactionStatus @default(INITIATED)
 
   clientProofUrl   String?
   operatorProofUrl String?
 
+  /// Numéro perso opérateur (virement SwapTrust → opérateur) — non exposé au client
   operatorPaymentNumber String?
   clientReceiveNumber   String?
 
@@ -181,6 +209,7 @@ model Transaction {
   operatorLogs OperatorLog[]
 
   @@index([operatorId])
+  @@index([platformAccountId])
   @@map("transactions")
 }
 

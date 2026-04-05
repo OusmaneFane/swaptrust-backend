@@ -6,12 +6,15 @@ import {
 import { KycStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UploadService } from '../upload/upload.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 
 @Injectable()
 export class KycService {
   constructor(
     private prisma: PrismaService,
     private upload: UploadService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   async submit(
@@ -31,7 +34,7 @@ export class KycService {
       data: { kycStatus: KycStatus.PENDING },
     });
 
-    return this.prisma.kycDocument.upsert({
+    const doc = await this.prisma.kycDocument.upsert({
       where: { userId },
       create: {
         userId,
@@ -52,6 +55,21 @@ export class KycService {
         reviewedBy: null,
       },
     });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, phoneMali: true, phoneRussia: true },
+    });
+    if (user) {
+      void this.whatsapp
+        .sendKycSubmitted({
+          name: user.name,
+          phone: clientWhatsappPhone(user),
+        })
+        .catch(() => {});
+    }
+
+    return doc;
   }
 
   async status(userId: number) {
@@ -80,6 +98,15 @@ export class KycService {
         data: { kycStatus: KycStatus.VERIFIED },
       }),
     ]);
+    const user = await this.prisma.user.findUnique({
+      where: { id: docUserId },
+      select: { name: true, phoneMali: true, phoneRussia: true },
+    });
+    if (user) {
+      void this.whatsapp
+        .sendKycApproved({ name: user.name, phone: clientWhatsappPhone(user) })
+        .catch(() => {});
+    }
     return { approved: true };
   }
 
@@ -101,6 +128,18 @@ export class KycService {
         data: { kycStatus: KycStatus.REJECTED },
       }),
     ]);
+    const user = await this.prisma.user.findUnique({
+      where: { id: docUserId },
+      select: { name: true, phoneMali: true, phoneRussia: true },
+    });
+    if (user) {
+      void this.whatsapp
+        .sendKycRejected(
+          { name: user.name, phone: clientWhatsappPhone(user) },
+          note,
+        )
+        .catch(() => {});
+    }
     return { rejected: true };
   }
 

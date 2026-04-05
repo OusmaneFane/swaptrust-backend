@@ -28,7 +28,9 @@
     "prisma:seed": "pnpm run prisma -- db seed",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f api"
+    "docker:logs": "docker compose logs -f api",
+    "docker:redis": "docker compose -f docker-compose.yml up -d redis",
+    "docker:redis-only": "docker compose -f docker-compose.redis.yml up -d"
   },
   "dependencies": {
     "@keyv/redis": "^5.1.6",

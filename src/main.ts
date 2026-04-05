@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -67,13 +68,23 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
+  // Même préfixe que les routes REST : /api/v1/docs (évite de chercher /api/docs alors que l’API est sous /api/v1)
+  SwaggerModule.setup('docs', app, document, {
     swaggerOptions: { persistAuthorization: true },
+    useGlobalPrefix: true,
+  });
+
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get(['/api/docs', '/api/docs/'], (_req: Request, res: Response) => {
+    res.redirect(301, '/api/v1/docs');
   });
 
   const port = parseInt(process.env.PORT ?? '3001', 10);
-  await app.listen(port);
-  logger.log(`SwapTrust API http://localhost:${port}`);
-  logger.log(`Swagger http://localhost:${port}/api/docs`);
+  const host = process.env.HOST ?? '0.0.0.0';
+  await app.listen(port, host);
+  const base = `http://127.0.0.1:${port}`;
+  logger.log(`SwapTrust API ${base}/api/v1`);
+  logger.log(`Swagger UI ${base}/api/v1/docs`);
+  logger.log(`Health ${base}/api/v1/health`);
 }
 bootstrap();

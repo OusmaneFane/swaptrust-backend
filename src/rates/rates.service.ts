@@ -7,6 +7,7 @@ import { firstValueFrom } from 'rxjs';
 import type { Cache } from 'cache-manager';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CommissionsService } from '../commissions/commissions.service';
 
 export interface RateResult {
   /** 1 XOF = rate RUB (sans spread). */
@@ -47,6 +48,7 @@ export class RatesService {
     private readonly config: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
     private readonly prisma: PrismaService,
+    private readonly commissions: CommissionsService,
   ) {}
 
   private spreadPercent(): number {
@@ -119,18 +121,18 @@ export class RatesService {
     await this.cacheSet(CACHE_KEY_CURRENT, result, this.cacheTtlMs());
   }
 
-  /** Taux XOF→RUB (avec spread) — utilisé par les demandes d’échange. */
+  /** Taux XOF→RUB Google (sans spread) — base des montants et affichage transparent. */
   async getCurrentRateXofToRub(): Promise<{ rate: number }> {
     const r = await this.getCurrentRate();
-    return { rate: r.rateWithSpread };
+    return { rate: r.rate };
   }
 
-  /** Taux `from` → `to` (avec spread), pour XOF/RUB uniquement. */
+  /** Taux `from` → `to` (Google, sans spread), pour XOF/RUB uniquement. */
   async getRateDecimal(from: string, to: string): Promise<number> {
     if (from === to) return 1;
     const r = await this.getCurrentRate();
-    if (from === 'XOF' && to === 'RUB') return r.rateWithSpread;
-    if (from === 'RUB' && to === 'XOF') return 1 / r.rateWithSpread;
+    if (from === 'XOF' && to === 'RUB') return r.rate;
+    if (from === 'RUB' && to === 'XOF') return 1 / r.rate;
     throw new ServiceUnavailableException('Pair not supported');
   }
 
@@ -360,30 +362,33 @@ export class RatesService {
       return {
         result: amount,
         rate: 1,
+        googleRate: 1,
         commission: 0,
         total: amount,
+        commissionPercent: this.commissions.getCommissionPercent(),
       };
     }
 
-    const { rateWithSpread } = await this.getCurrentRate();
-    const commissionPercent =
-      this.config.get<number>('commission.platformPercent') ?? 2;
+    const { rate: googleRate } = await this.getCurrentRate();
 
-    let result: number;
     if (from === 'XOF' && to === 'RUB') {
-      result = Math.round(amount * rateWithSpread);
-    } else {
-      result = Math.round(amount / rateWithSpread);
+      const b = this.commissions.calculate(amount, googleRate, 'XOF');
+      return {
+        ...b,
+        result: b.clientReceives,
+        rate: googleRate,
+        commission: b.commissionAmount,
+        total: b.totalToSend,
+      };
     }
 
-    const commission = Math.round((amount * commissionPercent) / 100);
-    const total = amount + commission;
-
+    const b = this.commissions.calculate(amount, googleRate, 'RUB');
     return {
-      result,
-      rate: rateWithSpread,
-      commission,
-      total,
+      ...b,
+      result: b.clientReceives,
+      rate: googleRate,
+      commission: b.commissionAmount,
+      total: b.totalToSend,
     };
   }
 

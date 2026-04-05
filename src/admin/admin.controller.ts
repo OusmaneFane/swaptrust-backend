@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Put,
   Delete,
   Param,
@@ -14,6 +15,8 @@ import { UserRole } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AssignRoleDto } from './dto/assign-role.dto';
+import { CreatePlatformAccountDto } from './dto/create-platform-account.dto';
+import { UpdatePlatformAccountDto } from './dto/update-platform-account.dto';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -99,5 +102,40 @@ export class AdminController {
   @ApiOperation({ summary: 'KYC en attente' })
   kycPending() {
     return this.admin.kycPending();
+  }
+
+  @Get('platform-accounts')
+  @ApiOperation({ summary: '[Admin] Numéros de réception SwapTrust' })
+  listPlatformAccounts() {
+    return this.admin.listPlatformAccounts();
+  }
+
+  @Post('platform-accounts')
+  @ApiOperation({ summary: '[Admin] Ajouter un compte plateforme' })
+  addPlatformAccount(@Body() dto: CreatePlatformAccountDto) {
+    return this.admin.createPlatformAccount(dto);
+  }
+
+  @Put('platform-accounts/:id')
+  @ApiOperation({ summary: '[Admin] Modifier un compte plateforme' })
+  updatePlatformAccount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePlatformAccountDto,
+  ) {
+    return this.admin.updatePlatformAccount(id, dto);
+  }
+
+  @Delete('platform-accounts/:id')
+  @ApiOperation({ summary: '[Admin] Désactiver un compte plateforme' })
+  deactivatePlatformAccount(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.deactivatePlatformAccount(id);
+  }
+
+  @Get('revenue/summary')
+  @ApiOperation({
+    summary: '[Admin] Synthèse commissions / volumes (CFA, NEED_RUB)',
+  })
+  revenueSummary(@Query('period') period = 'month') {
+    return this.admin.revenueSummary(period);
   }
 }

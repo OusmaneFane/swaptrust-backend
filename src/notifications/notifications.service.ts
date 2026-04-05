@@ -64,6 +64,23 @@ export class NotificationsService {
     );
   }
 
+  async notifyAdmins(payload: {
+    type: string;
+    title: string;
+    body: string;
+    data?: Prisma.InputJsonValue;
+  }) {
+    const admins = await this.prisma.user.findMany({
+      where: { role: UserRole.ADMIN },
+      select: { id: true },
+    });
+    await Promise.all(
+      admins.map((a) =>
+        this.createInApp(a.id, payload.type, payload.title, payload.body, payload.data),
+      ),
+    );
+  }
+
   async notifyEmail(userEmail: string, subject: string, text: string) {
     if (!this.mailer) return;
     const from = this.config.get<string>('mail.from');

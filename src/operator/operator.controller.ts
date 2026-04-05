@@ -80,13 +80,30 @@ export class OperatorController {
     return this.operatorService.getTransactionDetail(id, user.id, user.role);
   }
 
-  @Post('transactions/:id/verify-client-proof')
-  @ApiOperation({ summary: 'Marquer le reçu client comme vérifié' })
-  verifyClientProof(
+  @Post('transactions/:id/confirm-platform-transfer')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { proof: { type: 'string', format: 'binary' } },
+      required: ['proof'],
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('proof', { storage: memoryStorage(), limits: { fileSize: 5_242_880 } }),
+  )
+  @ApiOperation({
+    summary:
+      'Confirmer réception du virement SwapTrust → opérateur (preuve). Passe la transaction en OPERATOR_VERIFIED.',
+  })
+  confirmPlatformTransfer(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: Express.User,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.operatorService.verifyClientProof(id, user.id, user.role);
+    if (!file) throw new BadRequestException('proof file required');
+    const proofUrl = this.upload.saveFile(file, 'proofs');
+    return this.operatorService.confirmPlatformTransfer(id, user.id, user.role, proofUrl);
   }
 
   @Post('transactions/:id/send')

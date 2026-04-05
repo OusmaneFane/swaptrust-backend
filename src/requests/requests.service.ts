@@ -4,14 +4,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma, RequestStatus, RequestType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RatesService } from '../rates/rates.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CommissionsService } from '../commissions/commissions.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { FilterRequestsDto } from './dto/filter-requests.dto';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
+import { formatCFA, formatRUB } from '../common/utils/format-money';
 
 const PENDING_TTL_MS = 30 * 60 * 1000;
+const PENDING_TTL_MIN = 30;
 
 @Injectable()
 export class RequestsService {
@@ -19,11 +25,16 @@ export class RequestsService {
     private readonly prisma: PrismaService,
     private readonly rates: RatesService,
     private readonly notifications: NotificationsService,
+    private readonly commissions: CommissionsService,
+    private readonly config: ConfigService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   async create(dto: CreateRequestDto, clientId: number) {
-    const { rate } = await this.rates.getCurrentRateXofToRub();
+    const { rate: googleRate } = await this.rates.getCurrentRateXofToRub();
     const amountWanted = BigInt(dto.amountWanted);
+    const minXof = this.config.get<number>('limits.minAmountXof') ?? 500_000;
+    const maxXof = this.config.get<number>('limits.maxAmountXof') ?? 50_000_000;
 
     let amountToSendBase: bigint;
     let currencyWanted: string;
@@ -32,15 +43,29 @@ export class RequestsService {
     if (dto.type === RequestType.NEED_RUB) {
       currencyWanted = 'RUB';
       currencyToSend = 'XOF';
-      amountToSendBase = BigInt(Math.round(Number(amountWanted) / rate));
+      amountToSendBase = BigInt(Math.round(Number(amountWanted) / googleRate));
+      const netXof = Number(amountToSendBase);
+      if (netXof < minXof || netXof > maxXof) {
+        throw new BadRequestException(
+          `Montant CFA hors limites (${minXof}–${maxXof} centimes, hors commission)`,
+        );
+      }
     } else {
       currencyWanted = 'XOF';
       currencyToSend = 'RUB';
-      amountToSendBase = BigInt(Math.round(Number(amountWanted) * rate));
+      const wantedXof = Number(amountWanted);
+      if (wantedXof < minXof || wantedXof > maxXof) {
+        throw new BadRequestException(
+          `Montant CFA hors limites (${minXof}–${maxXof} centimes)`,
+        );
+      }
+      amountToSendBase = BigInt(Math.round(Number(amountWanted) * googleRate));
     }
 
-    const commission = BigInt(Math.round(Number(amountToSendBase) * 0.02));
-    const amountToSendTotal = amountToSendBase + commission;
+    const sendCurrency = dto.type === RequestType.NEED_RUB ? 'XOF' : 'RUB';
+    const breakdown = this.commissions.calculate(Number(amountToSendBase), googleRate, sendCurrency);
+    const commission = BigInt(breakdown.commissionAmount);
+    const amountToSendTotal = BigInt(breakdown.totalToSend);
     const expiresAt = new Date(Date.now() + PENDING_TTL_MS);
 
     const request = await this.prisma.exchangeRequest.create({
@@ -51,7 +76,7 @@ export class RequestsService {
         currencyWanted,
         amountToSend: amountToSendTotal,
         currencyToSend,
-        rateAtRequest: new Prisma.Decimal(rate.toFixed(6)),
+        rateAtRequest: new Prisma.Decimal(googleRate.toFixed(6)),
         commissionAmount: commission,
         paymentMethod: dto.paymentMethod,
         phoneToSend: dto.phoneToSend,
@@ -69,6 +94,31 @@ export class RequestsService {
       body: `${label} — ${amountWanted.toString()} ${currencyWanted}`,
       data: { requestId: request.id },
     });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: clientId },
+      select: { name: true, phoneMali: true, phoneRussia: true },
+    });
+    if (user) {
+      const amountToSendLabel =
+        currencyToSend === 'XOF'
+          ? formatCFA(Number(request.amountToSend))
+          : formatRUB(Number(request.amountToSend));
+      const amountReceiveLabel =
+        currencyWanted === 'XOF'
+          ? formatCFA(Number(request.amountWanted))
+          : formatRUB(Number(request.amountWanted));
+      void this.whatsapp
+        .sendRequestCreated({
+          user: { name: user.name, phone: clientWhatsappPhone(user) },
+          requestId: request.id,
+          type: request.type as 'NEED_RUB' | 'NEED_CFA',
+          amountToSend: amountToSendLabel,
+          amountReceive: amountReceiveLabel,
+          expiresInMin: PENDING_TTL_MIN,
+        })
+        .catch(() => {});
+    }
 
     return request;
   }
@@ -145,7 +195,9 @@ export class RequestsService {
         status: RequestStatus.PENDING,
         expiresAt: { lte: new Date() },
       },
-      select: { id: true, clientId: true },
+      include: {
+        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+      },
     });
     if (toExpire.length === 0) return 0;
 
@@ -161,6 +213,15 @@ export class RequestsService {
         body: 'Aucun opérateur n’a pris en charge votre demande à temps. Vous pouvez en créer une nouvelle.',
         data: { requestId: row.id },
       });
+      void this.whatsapp
+        .sendRequestExpired({
+          user: {
+            name: row.client.name,
+            phone: clientWhatsappPhone(row.client),
+          },
+          requestId: row.id,
+        })
+        .catch(() => {});
     }
     return toExpire.length;
   }

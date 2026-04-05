@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PaymentMethod, PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import bcrypt from 'bcryptjs';
 import { mysqlConnectionUrl } from '../src/prisma/mysql-connection-url';
@@ -61,6 +61,46 @@ async function main() {
       kycStatus: 'VERIFIED',
     } as any,
   });
+
+  const platformRows: Array<{
+    method: PaymentMethod;
+    accountNumber: string;
+    accountName: string;
+  }> = [
+    {
+      method: PaymentMethod.ORANGE_MONEY,
+      accountNumber: process.env.SWAPTRUST_ORANGE_MONEY || '+22370000000',
+      accountName: 'SwapTrust — Orange Money',
+    },
+    {
+      method: PaymentMethod.WAVE,
+      accountNumber: process.env.SWAPTRUST_WAVE || '+22380000000',
+      accountName: 'SwapTrust — Wave',
+    },
+    {
+      method: PaymentMethod.BANK_TRANSFER,
+      accountNumber: process.env.SWAPTRUST_BANK_IBAN || 'ML00XXXXXXXXXXXX',
+      accountName: process.env.SWAPTRUST_BANK_NAME || 'SwapTrust — Virement BHM',
+    },
+  ];
+
+  for (const row of platformRows) {
+    const existing = await prisma.platformAccount.findFirst({
+      where: { method: row.method },
+    });
+    if (existing) {
+      await prisma.platformAccount.update({
+        where: { id: existing.id },
+        data: {
+          accountNumber: row.accountNumber,
+          accountName: row.accountName,
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.platformAccount.create({ data: row });
+    }
+  }
 
   console.log('Seed OK: admin@swaptrust.local / AdminSwapTrust123!');
   console.log('Seed OK: operator@swaptrust.local / OperatorSwapTrust123!');

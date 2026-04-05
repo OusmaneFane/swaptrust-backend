@@ -1,0 +1,8 @@
+# Redis seul — utilisable depuis n'importe quel dossier :
+#   docker compose -f /chemin/vers/swap-trust-backend/docker-compose.redis.yml up -d
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    restart: unless-stopped

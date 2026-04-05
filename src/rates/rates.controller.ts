@@ -12,7 +12,7 @@ export class RatesController {
   @Get('current')
   @ApiOperation({
     summary:
-      'Taux XOF/RUB (Google Finance, cache Redis, fallback DB). Utiliser rateWithSpread / rubPerXofWithSpread pour l’affichage (évite les erreurs d’inversion côté client).',
+      'Taux XOF/RUB : `rate` = Google Finance brut (affichage / échange transparent). `rateWithSpread` est informatif ; les demandes utilisent `rate` + commission séparée.',
   })
   current() {
     return this.rates.getCurrentRate();

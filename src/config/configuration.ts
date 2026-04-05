@@ -2,6 +2,15 @@ export default () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3001', 10),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  /** Liens dans les messages (WhatsApp, emails) */
+  app: {
+    url: process.env.APP_URL ?? process.env.FRONTEND_URL ?? 'https://swaptrust.com',
+  },
+  notifml: {
+    apiKey: process.env.NOTIFML_API_KEY ?? '',
+    baseUrl: process.env.NOTIFML_BASE_URL ?? 'https://api.notif.ml',
+    sandbox: process.env.NOTIFML_SANDBOX === 'true',
+  },
   databaseUrl: process.env.DATABASE_URL,
   redis: {
     host: process.env.REDIS_HOST ?? 'localhost',
@@ -35,7 +44,21 @@ export default () => ({
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE ?? '5242880', 10),
   },
   commission: {
-    platformPercent: parseFloat(process.env.PLATFORM_COMMISSION_PERCENT ?? '2'),
+    platformPercent: parseFloat(
+      process.env.COMMISSION_PERCENT ?? process.env.PLATFORM_COMMISSION_PERCENT ?? '2',
+    ),
     spreadPercent: parseFloat(process.env.EXCHANGE_SPREAD_PERCENT ?? '1'),
+  },
+  swaptrust: {
+    orangeMoney: process.env.SWAPTRUST_ORANGE_MONEY ?? '',
+    wave: process.env.SWAPTRUST_WAVE ?? '',
+    bankIban: process.env.SWAPTRUST_BANK_IBAN ?? '',
+    bankName: process.env.SWAPTRUST_BANK_NAME ?? '',
+    whatsappNumber: process.env.SWAPTRUST_WHATSAPP_NUMBER ?? '',
+  },
+  limits: {
+    /** Montants en centimes CFA (ex. 500 000 = 5 000 F CFA) */
+    minAmountXof: parseInt(process.env.MIN_AMOUNT_XOF ?? '500000', 10),
+    maxAmountXof: parseInt(process.env.MAX_AMOUNT_XOF ?? '50000000', 10),
   },
 });

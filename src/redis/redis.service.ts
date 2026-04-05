@@ -11,9 +11,20 @@ export class RedisService implements OnModuleDestroy {
     const host = this.config.get<string>('redis.host');
     const port = this.config.get<number>('redis.port');
     try {
-      this.client = new Redis({ host, port, maxRetriesPerRequest: 1, lazyConnect: true });
+      this.client = new Redis({
+        host,
+        port,
+        maxRetriesPerRequest: 1,
+        lazyConnect: true,
+        connectTimeout: 4_000,
+        enableOfflineQueue: false,
+      });
       void this.client.connect().catch(() => {
-        this.logger.warn('Redis unavailable — OTP cache disabled');
+        this.logger.warn(
+          `Redis indisponible (${host}:${port}) — cache OTP désactivé (fallback mémoire). ` +
+            `Pour le dev : \`docker compose up -d redis\` ou \`redis-server\`. ` +
+            `Sans Redis, le cache des taux (/rates) peut aussi être lent ou bloqué.`,
+        );
         this.client?.disconnect();
         this.client = null;
       });

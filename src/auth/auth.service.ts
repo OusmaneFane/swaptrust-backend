@@ -12,6 +12,8 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RedisService } from '../redis/redis.service';
 import { SmsService } from '../sms/sms.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 
 const OTP_TTL_SEC = 300;
 const OTP_FALLBACK = new Map<string, { code: string; exp: number }>();
@@ -24,6 +26,7 @@ export class AuthService {
     private config: ConfigService,
     private redis: RedisService,
     private sms: SmsService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   private async signAccessToken(userId: number, role: UserRole) {
@@ -66,6 +69,10 @@ export class AuthService {
       data: { refreshToken },
     });
     const accessToken = await this.signAccessToken(user.id, user.role);
+    const phone = clientWhatsappPhone(user);
+    void this.whatsapp
+      .sendWelcome({ name: user.name, phone })
+      .catch(() => {});
     return { accessToken, refreshToken };
   }
 

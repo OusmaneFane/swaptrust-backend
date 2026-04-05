@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   Prisma,
   RequestStatus,
@@ -17,6 +18,9 @@ import { RequestsService } from '../requests/requests.service';
 import { FilterRequestsDto } from '../requests/dto/filter-requests.dto';
 import { FilterTransactionsDto } from '../transactions/dto/filter-transactions.dto';
 import { TakeRequestDto } from './dto/take-request.dto';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
+import { formatCFA, formatRUB } from '../common/utils/format-money';
 
 const HOURS_24 = 24 * 60 * 60 * 1000;
 
@@ -26,6 +30,8 @@ export class OperatorService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly requestsService: RequestsService,
+    private readonly config: ConfigService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   listPendingRequests(filters: FilterRequestsDto) {
@@ -71,10 +77,24 @@ export class OperatorService {
       throw new BadRequestException('Demande introuvable, expirée ou déjà prise en charge');
     }
 
+    const platformAccount = await this.prisma.platformAccount.findFirst({
+      where: { method: request.paymentMethod, isActive: true },
+      orderBy: { id: 'asc' },
+    });
+    if (!platformAccount) {
+      throw new BadRequestException(
+        'Aucun compte SwapTrust actif pour cette méthode de paiement. Contactez l’administrateur.',
+      );
+    }
+
     const amountCfa =
       request.type === RequestType.NEED_RUB ? request.amountToSend : request.amountWanted;
     const amountRub =
       request.type === RequestType.NEED_RUB ? request.amountWanted : request.amountToSend;
+
+    const commissionPct = this.config.get<number>('commission.platformPercent') ?? 2;
+    const grossAmount = request.amountToSend;
+    const netAmount = grossAmount - request.commissionAmount;
 
     const transaction = await this.prisma.$transaction(async (tx) => {
       const t = await tx.transaction.create({
@@ -86,6 +106,11 @@ export class OperatorService {
           amountRub,
           rate: request.rateAtRequest,
           commissionAmount: request.commissionAmount,
+          grossAmount,
+          netAmount,
+          commissionPercent: new Prisma.Decimal(commissionPct.toFixed(2)),
+          googleRate: request.rateAtRequest,
+          platformAccountId: platformAccount.id,
           status: TransactionStatus.INITIATED,
           operatorPaymentNumber: dto.operatorPaymentNumber,
           clientReceiveNumber: request.phoneToSend,
@@ -114,10 +139,34 @@ export class OperatorService {
 
     await this.notifications.notify(request.clientId, {
       type: 'REQUEST_TAKEN',
-      title: 'Votre demande est prise en charge',
-      body: `Envoyez vos fonds sur : ${dto.operatorPaymentNumber}`,
-      data: { transactionId: transaction.id, requestId: request.id },
+      title: 'Votre demande est prise en charge !',
+      body: `Envoyez le montant exact sur le numéro SwapTrust ${platformAccount.accountName} — ne payez pas directement l’opérateur.`,
+      data: {
+        transactionId: transaction.id,
+        requestId: request.id,
+        platformAccountNumber: platformAccount.accountNumber,
+        platformAccountName: platformAccount.accountName,
+        exactAmount: grossAmount.toString(),
+      },
     });
+
+    const exactStr =
+      request.type === RequestType.NEED_RUB
+        ? formatCFA(Number(grossAmount))
+        : formatRUB(Number(grossAmount));
+    void this.whatsapp
+      .sendRequestTaken({
+        user: {
+          name: request.client.name,
+          phone: clientWhatsappPhone(request.client),
+        },
+        transactionId: transaction.id,
+        platformAccountNumber: platformAccount.accountNumber,
+        platformAccountName: platformAccount.accountName,
+        exactAmount: exactStr,
+        operatorName: operator.name ?? 'Opérateur',
+      })
+      .catch(() => {});
 
     return transaction;
   }
@@ -148,6 +197,7 @@ export class OperatorService {
       where,
       include: {
         request: true,
+        platformAccount: true,
         client: { select: { id: true, name: true, phoneMali: true, phoneRussia: true } },
         operatorLogs: { orderBy: { createdAt: 'desc' } },
       },
@@ -170,6 +220,7 @@ export class OperatorService {
           },
         },
         operator: { select: { id: true, name: true, role: true } },
+        platformAccount: true,
         operatorLogs: { orderBy: { createdAt: 'asc' } },
         messages: { orderBy: { createdAt: 'asc' } },
         dispute: true,
@@ -180,21 +231,45 @@ export class OperatorService {
     return t;
   }
 
-  async verifyClientProof(transactionId: number, operatorId: number, role: UserRole) {
+  /**
+   * Étape 2 — L’opérateur confirme avoir reçu le virement net depuis SwapTrust (preuve interne).
+   */
+  async confirmPlatformTransfer(
+    transactionId: number,
+    operatorId: number,
+    role: UserRole,
+    proofUrl: string,
+  ) {
     const t = await this.prisma.transaction.findUniqueOrThrow({ where: { id: transactionId } });
     this.assertAssignedOperator(t.operatorId, operatorId, role);
     if (t.status !== TransactionStatus.CLIENT_SENT) {
-      throw new BadRequestException('Le reçu client doit être uploadé avant vérification');
+      throw new BadRequestException(
+        'Le client doit d’abord confirmer l’envoi vers le compte SwapTrust',
+      );
+    }
+    if (t.platformTransferredAt) {
+      throw new BadRequestException('Ce transfert plateforme → opérateur est déjà enregistré');
     }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.transaction.update({
         where: { id: transactionId },
-        data: { status: TransactionStatus.OPERATOR_VERIFIED },
+        data: {
+          platformToOperatorProofUrl: proofUrl,
+          platformTransferredAt: new Date(),
+          status: TransactionStatus.OPERATOR_VERIFIED,
+        },
       });
       await tx.operatorLog.create({
-        data: { transactionId, operatorId, action: 'CLIENT_PROOF_VIEWED' },
+        data: { transactionId, operatorId, action: 'PLATFORM_TO_OPERATOR_CONFIRMED' },
       });
+    });
+
+    await this.notifications.notify(t.clientId, {
+      type: 'PLATFORM_TO_OPERATOR_DONE',
+      title: 'Votre échange avance',
+      body: 'SwapTrust a reversé le montant net à l’opérateur. Vous recevrez vos roubles sous peu.',
+      data: { transactionId },
     });
 
     return this.getTransactionDetail(transactionId, operatorId, role);
@@ -206,13 +281,18 @@ export class OperatorService {
     role: UserRole,
     proofUrl: string,
   ) {
-    const t = await this.prisma.transaction.findUniqueOrThrow({ where: { id: transactionId } });
+    const t = await this.prisma.transaction.findUniqueOrThrow({
+      where: { id: transactionId },
+      include: {
+        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        request: { select: { type: true } },
+      },
+    });
     this.assertAssignedOperator(t.operatorId, operatorId, role);
-    if (
-      t.status !== TransactionStatus.OPERATOR_VERIFIED &&
-      t.status !== TransactionStatus.CLIENT_SENT
-    ) {
-      throw new BadRequestException('État de transaction invalide pour l’envoi opérateur');
+    if (t.status !== TransactionStatus.OPERATOR_VERIFIED) {
+      throw new BadRequestException(
+        'L’opérateur doit d’abord confirmer la réception du virement SwapTrust (étape intermédiaire)',
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -235,6 +315,22 @@ export class OperatorService {
       body: 'L’opérateur a envoyé vos fonds. Vérifiez votre compte et confirmez la réception.',
       data: { transactionId },
     });
+
+    const amountSentLabel =
+      t.request.type === RequestType.NEED_RUB
+        ? formatRUB(Number(t.amountRub))
+        : formatCFA(Number(t.amountCfa));
+    void this.whatsapp
+      .sendOperatorSentFunds({
+        user: {
+          name: t.client.name,
+          phone: clientWhatsappPhone(t.client),
+        },
+        transactionId,
+        amountSent: amountSentLabel,
+        receiveNumber: t.clientReceiveNumber ?? '—',
+      })
+      .catch(() => {});
 
     return this.getTransactionDetail(transactionId, operatorId, role);
   }
@@ -260,7 +356,10 @@ export class OperatorService {
   ) {
     const t = await this.prisma.transaction.findUniqueOrThrow({
       where: { id: transactionId },
-      include: { request: true },
+      include: {
+        request: true,
+        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+      },
     });
     this.assertAssignedOperator(t.operatorId, operatorId, role);
     if (
@@ -295,6 +394,17 @@ export class OperatorService {
       body: reason,
       data: { transactionId },
     });
+
+    void this.whatsapp
+      .sendTransactionCancelled({
+        user: {
+          name: t.client.name,
+          phone: clientWhatsappPhone(t.client),
+        },
+        transactionId,
+        reason,
+      })
+      .catch(() => {});
 
     return { cancelled: true };
   }

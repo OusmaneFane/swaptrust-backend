@@ -9,6 +9,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateDisputeDto } from './dto/create-dispute.dto';
 import { UploadService } from '../upload/upload.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 
 @Injectable()
 export class DisputesService {
@@ -16,6 +18,7 @@ export class DisputesService {
     private prisma: PrismaService,
     private upload: UploadService,
     private notifications: NotificationsService,
+    private readonly whatsapp: WhatsappService,
   ) {}
 
   private isParty(t: { clientId: number; operatorId: number }, userId: number) {
@@ -62,6 +65,20 @@ export class DisputesService {
         }),
       ),
     );
+
+    const opener = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, phoneMali: true, phoneRussia: true },
+    });
+    if (opener) {
+      void this.whatsapp
+        .sendDisputeOpened({
+          user: { name: opener.name, phone: clientWhatsappPhone(opener) },
+          transactionId,
+          disputeId: d.id,
+        })
+        .catch(() => {});
+    }
 
     return d;
   }
@@ -128,9 +145,18 @@ export class DisputesService {
   }
 
   async resolve(adminId: number, id: number, resolution: string) {
-    const d = await this.prisma.dispute.findUnique({ where: { id } });
+    const d = await this.prisma.dispute.findUnique({
+      where: { id },
+      include: {
+        transaction: {
+          include: {
+            client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+          },
+        },
+      },
+    });
     if (!d) throw new NotFoundException();
-    return this.prisma.$transaction(async (db) => {
+    await this.prisma.$transaction(async (db) => {
       await db.dispute.update({
         where: { id },
         data: {
@@ -142,9 +168,19 @@ export class DisputesService {
       });
       await db.transaction.update({
         where: { id: d.transactionId },
-        data: { status: TransactionStatus.COMPLETED },
+        data: { status: TransactionStatus.COMPLETED, completedAt: new Date() },
       });
-      return { resolved: true };
     });
+
+    const c = d.transaction.client;
+    void this.whatsapp
+      .sendDisputeResolved({
+        user: { name: c.name, phone: clientWhatsappPhone(c) },
+        transactionId: d.transactionId,
+        resolution,
+      })
+      .catch(() => {});
+
+    return { resolved: true };
   }
 }

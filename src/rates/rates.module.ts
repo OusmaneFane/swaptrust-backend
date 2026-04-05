@@ -6,9 +6,11 @@ import { createKeyv } from '@keyv/redis';
 import { RatesController } from './rates.controller';
 import { RatesService } from './rates.service';
 import { RatesScheduler } from './rates.scheduler';
+import { CommissionsModule } from '../commissions/commissions.module';
 
 @Module({
   imports: [
+    CommissionsModule,
     HttpModule.register({
       timeout: 15_000,
       maxRedirects: 3,
