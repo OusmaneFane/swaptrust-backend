@@ -1,0 +1,94 @@
+# Push sur develop ou staging → image GHCR :staging (+ :sha-…) → déploiement SSH (environnement GitHub `staging`).
+#
+# Environnement GitHub `staging` — secrets : SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, GHCR_USERNAME, GHCR_READ_TOKEN
+# Variable : DEPLOY_PATH (chemin absolu sur le serveur).
+
+name: Deploy staging
+
+on:
+  push:
+    branches: [develop, staging]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-staging-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/reusable-quality.yml
+
+  build-push:
+    name: Build and push GHCR (staging)
+    runs-on: ubuntu-latest
+    needs: [quality]
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Registry login (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Image name and tag
+        id: meta
+        run: |
+          set -euo pipefail
+          REPO_LOWER=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          echo "repo_lower=${REPO_LOWER}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${REPO_LOWER}:staging" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ghcr.io/${{ steps.meta.outputs.repo_lower }}:sha-${{ github.sha }}
+          build-args: |
+            DATABASE_URL=mysql://ci:ci@127.0.0.1:3306/ci
+
+  deploy:
+    name: SSH deploy staging
+    runs-on: ubuntu-latest
+    needs: [build-push]
+    environment: staging
+    steps:
+      - name: SSH deploy
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          API_IMAGE: ${{ needs.build-push.outputs.image }}
+          GHCR_USER: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: API_IMAGE,GHCR_USER,GHCR_TOKEN
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY="${{ vars.DEPLOY_PATH }}"
+            if [ -z "${DEPLOY}" ]; then
+              echo "Définir la variable DEPLOY_PATH dans l’environnement GitHub staging."
+              exit 1
+            fi
+            if [ -z "${GHCR_TOKEN:-}" ] || [ -z "${GHCR_USER:-}" ]; then
+              echo "GHCR_READ_TOKEN et GHCR_USERNAME doivent être définis dans l’environnement staging."
+              exit 1
+            fi
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+            cd "${DEPLOY}"
+            export API_IMAGE="${API_IMAGE}"
+            docker compose -f docker-compose.prod.yml pull api
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans api
+            docker logout ghcr.io || true
