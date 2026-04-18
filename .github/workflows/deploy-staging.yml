@@ -77,6 +77,10 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            # Shell non interactif : souvent pas de /snap/bin ni profil complet (docker introuvable sinon).
+            [ -f /etc/profile ] && . /etc/profile || true
+            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:${PATH:-}"
+            command -v docker >/dev/null 2>&1 || { echo "docker introuvable (PATH=$PATH). Installe Docker ou ajoute son répertoire au PATH."; exit 127; }
             DEPLOY="${{ vars.DEPLOY_PATH }}"
             if [ -z "${DEPLOY}" ]; then
               echo "Définir la variable DEPLOY_PATH dans l’environnement GitHub staging."
