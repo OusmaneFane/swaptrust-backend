@@ -1,6 +1,8 @@
 # Push sur main → image GHCR :production (+ :sha-…) → déploiement SSH (environnement GitHub `production`).
 #
-# Environnement GitHub `production` — secrets : SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, GHCR_USERNAME, GHCR_READ_TOKEN
+# Environnement GitHub `production` — secrets :
+#   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, GHCR_USERNAME, GHCR_READ_TOKEN
+#   ENV_FILE = contenu brut complet du .env prod (secret multiligne)
 # Variable : DEPLOY_PATH (chemin absolu sur le serveur).
 
 name: Deploy production
@@ -58,12 +60,27 @@ jobs:
             DATABASE_URL=mysql://ci:ci@127.0.0.1:3306/ci
 
   deploy:
-    name: SSH deploy production
+    name: Deploy production (env + Docker)
     runs-on: ubuntu-latest
     needs: [build-push]
     environment: production
     steps:
-      - name: SSH deploy
+      - name: Écrire .env depuis le secret (valeur brute)
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          python3 -c "import os, pathlib; t=os.environ.get('ENV_FILE',''); assert t.strip(), 'ENV_FILE vide (production)'; pathlib.Path('.env').write_text(t)"
+
+      - name: Copier .env sur le serveur
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: .env
+          target: ${{ vars.DEPLOY_PATH }}
+
+      - name: SSH — pull & up
         uses: appleboy/ssh-action@v1.2.0
         env:
           API_IMAGE: ${{ needs.build-push.outputs.image }}
@@ -92,6 +109,7 @@ jobs:
             fi
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
             cd "${DEPLOY}"
+            chmod 600 .env 2>/dev/null || true
             export API_IMAGE="${API_IMAGE}"
             docker compose -f docker-compose.prod.yml pull api
             docker compose -f docker-compose.prod.yml up -d --remove-orphans api
