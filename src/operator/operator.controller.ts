@@ -94,7 +94,7 @@ export class OperatorController {
   )
   @ApiOperation({
     summary:
-      'Confirmer réception du virement SwapTrust → opérateur (preuve). Passe la transaction en OPERATOR_VERIFIED.',
+      'Confirmer réception du virement DoniSend → opérateur (preuve). Passe la transaction en OPERATOR_VERIFIED.',
   })
   confirmPlatformTransfer(
     @Param('id', ParseIntPipe) id: number,

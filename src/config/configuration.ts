@@ -45,7 +45,7 @@ export default () => ({
   },
   commission: {
     platformPercent: parseFloat(
-      process.env.COMMISSION_PERCENT ?? process.env.PLATFORM_COMMISSION_PERCENT ?? '2',
+      process.env.COMMISSION_PERCENT ?? process.env.PLATFORM_COMMISSION_PERCENT ?? '0',
     ),
     spreadPercent: parseFloat(process.env.EXCHANGE_SPREAD_PERCENT ?? '1'),
   },

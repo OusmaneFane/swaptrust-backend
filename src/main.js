@@ -72,7 +72,7 @@ function bootstrap() {
                     app.useGlobalInterceptors(new common_1.ClassSerializerInterceptor(app.get(core_1.Reflector)), new transform_interceptor_1.TransformInterceptor());
                     app.setGlobalPrefix('api/v1');
                     config = new swagger_1.DocumentBuilder()
-                        .setTitle('SwapTrust API')
+                        .setTitle('DoniSend API')
                         .setDescription("API d'échange sécurisé CFA ↔ Rouble")
                         .setVersion('1.0')
                         .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'access-token')
@@ -97,7 +97,7 @@ function bootstrap() {
                     return [4 /*yield*/, app.listen(port)];
                 case 2:
                     _c.sent();
-                    logger.log("SwapTrust API http://localhost:".concat(port));
+                    logger.log("DoniSend API http://localhost:".concat(port));
                     logger.log("Swagger http://localhost:".concat(port, "/api/docs"));
                     return [2 /*return*/];
             }

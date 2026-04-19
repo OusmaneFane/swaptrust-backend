@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserRole } from '@prisma/client';
+import { KycStatus, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -61,6 +61,7 @@ export class AuthService {
         phoneMali: dto.phoneMali,
         phoneRussia: dto.phoneRussia,
         countryResidence: dto.countryResidence,
+        kycStatus: KycStatus.VERIFIED,
       },
     });
     const refreshToken = await this.signRefreshToken(user.id);

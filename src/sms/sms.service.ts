@@ -17,7 +17,7 @@ export class SmsService {
 
   async sendOtp(phone: string, code: string): Promise<void> {
     const from = this.config.get<string>('twilio.phoneNumber');
-    const body = `SwapTrust code: ${code}`;
+    const body = `DoniSend code: ${code}`;
     if (this.client && from) {
       await this.client.messages.create({ to: phone, from, body });
       return;

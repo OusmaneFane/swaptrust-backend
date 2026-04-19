@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { normalizeToE164 } from '../common/utils/phone-e164';
+import { CommissionsService } from '../commissions/commissions.service';
 
 @Injectable()
 export class WhatsappService {
@@ -14,6 +15,7 @@ export class WhatsappService {
   constructor(
     private readonly config: ConfigService,
     private readonly http: HttpService,
+    private readonly commissions: CommissionsService,
   ) {
     this.baseUrl = this.config.get<string>('notifml.baseUrl') ?? 'https://api.notif.ml';
     this.apiKey = this.config.get<string>('notifml.apiKey') ?? '';
@@ -21,7 +23,7 @@ export class WhatsappService {
   }
 
   private appUrl(): string {
-    return this.config.get<string>('app.url') ?? 'https://swaptrust.com';
+    return this.config.get<string>('app.url') ?? 'https://donisend.com';
   }
 
   async send(to: string, message: string, mediaUrl?: string): Promise<void> {
@@ -73,17 +75,18 @@ export class WhatsappService {
   }
 
   async sendWelcome(user: { name: string; phone: string }): Promise<void> {
-    const message = `✅ *Bienvenue sur SwapTrust, ${user.name} !*
+    const commissionPct = this.commissions.getCommissionPercent();
+    const message = `✅ *Bienvenue sur DoniSend, ${user.name} !*
 
 Votre compte a été créé avec succès.
 
-🔐 *Prochaine étape :* Vérifiez votre identité (KYC) pour commencer à échanger.
+Votre compte est *actif immédiatement* — vous pouvez commencer à échanger dès maintenant.
 
-Échangez vos CFA ↔ Roubles en toute sécurité, au taux Google exact, avec une commission de seulement 2%.
+Échangez vos CFA ↔ Roubles en toute sécurité, au taux Google exact, avec une commission de seulement ${commissionPct}%.
 
 👉 Connectez-vous sur ${this.appUrl()}
 
-_SwapTrust — L'échange sécurisé pour la diaspora malienne_`;
+_DoniSend — L'échange sécurisé pour la diaspora malienne_`;
 
     await this.send(user.phone, message);
   }
@@ -97,7 +100,7 @@ Vos documents d'identité ont bien été reçus et sont en cours de vérificatio
 
 Vous recevrez une notification WhatsApp dès que votre compte sera validé.
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(user.phone, message);
   }
@@ -105,7 +108,7 @@ _SwapTrust_`;
   async sendKycApproved(user: { name: string; phone: string }): Promise<void> {
     const message = `🎉 *Identité vérifiée, ${user.name} !*
 
-Votre compte SwapTrust est maintenant *entièrement activé*.
+Votre compte DoniSend est maintenant *entièrement activé*.
 
 Vous pouvez dès maintenant :
 • Poster une demande d'échange CFA ↔ Roubles
@@ -114,7 +117,7 @@ Vous pouvez dès maintenant :
 
 👉 ${this.appUrl()}/tableau-de-bord
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(user.phone, message);
   }
@@ -138,7 +141,7 @@ Votre demande de vérification n'a pas pu être validée.
 
 Des questions ? Répondez directement à ce message.
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(user.phone, message);
   }
@@ -166,7 +169,7 @@ Un opérateur va prendre en charge votre demande très prochainement.
 
 👉 Suivre ma demande : ${this.appUrl()}/demandes/${params.requestId}
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(params.user.phone, message);
   }
@@ -191,13 +194,13 @@ Montant EXACT : *${params.exactAmount}*
 ─────────────────────
 
 ⚠️ *Important :*
-• Envoyez sur ce numéro SwapTrust uniquement
+• Envoyez sur ce numéro DoniSend uniquement
 • Ne pas envoyer directement à l'opérateur
 • Uploadez votre reçu dans l'app après l'envoi
 
 👉 Aller sur ma transaction : ${this.appUrl()}/transactions/${params.transactionId}
 
-_SwapTrust — Transaction #${params.transactionId}_`;
+_DoniSend — Transaction #${params.transactionId}_`;
 
     await this.send(params.user.phone, message);
   }
@@ -211,13 +214,13 @@ _SwapTrust — Transaction #${params.transactionId}_`;
 
 Bonjour ${params.user.name}, votre preuve de paiement a bien été reçue.
 
-🔄 *Statut :* SwapTrust traite votre virement ; l'opérateur préparera l'envoi de vos fonds.
+🔄 *Statut :* DoniSend traite votre virement ; l'opérateur préparera l'envoi de vos fonds.
 
 Vous serez notifié dès que vos roubles sont en route.
 
 👉 ${this.appUrl()}/transactions/${params.transactionId}
 
-_SwapTrust — Transaction #${params.transactionId}_`;
+_DoniSend — Transaction #${params.transactionId}_`;
 
     await this.send(params.user.phone, message);
   }
@@ -243,7 +246,7 @@ Bonjour ${params.user.name}, l'opérateur vient d'envoyer *${params.amountSent}*
 
 👉 ${this.appUrl()}/transactions/${params.transactionId}
 
-_SwapTrust — Transaction #${params.transactionId}_`;
+_DoniSend — Transaction #${params.transactionId}_`;
 
     await this.send(params.user.phone, message);
   }
@@ -266,11 +269,11 @@ Félicitations ${params.user.name}, votre transaction est clôturée avec succè
 
 ⭐ *Donnez votre avis* sur cet échange dans l'application — cela aide toute la communauté.
 
-Merci de faire confiance à SwapTrust. À bientôt !
+Merci de faire confiance à DoniSend. À bientôt !
 
 👉 Laisser un avis : ${this.appUrl()}/transactions/${params.transactionId}
 
-_SwapTrust — L'échange sécurisé_`;
+_DoniSend — L'échange sécurisé_`;
 
     await this.send(params.user.phone, message);
   }
@@ -294,7 +297,7 @@ Vous pouvez publier une nouvelle demande à tout moment.
 
 Des questions ? Répondez à ce message.
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(params.user.phone, message);
   }
@@ -312,7 +315,7 @@ Publiez une nouvelle demande — nos opérateurs sont disponibles de *8h à 22h 
 
 👉 Nouvelle demande : ${this.appUrl()}/demandes/nouvelle
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(params.user.phone, message);
   }
@@ -326,7 +329,7 @@ _SwapTrust_`;
 
 Bonjour ${params.user.name}, votre litige sur la transaction #${params.transactionId} a bien été enregistré.
 
-Un administrateur SwapTrust va examiner votre dossier dans les *prochaines 24 heures*.
+Un administrateur DoniSend va examiner votre dossier dans les *prochaines 24 heures*.
 
 *Ce que vous pouvez faire :*
 • Ajouter des preuves supplémentaires dans l'app
@@ -334,7 +337,7 @@ Un administrateur SwapTrust va examiner votre dossier dans les *prochaines 24 he
 
 👉 Suivre mon litige : ${this.appUrl()}/transactions/${params.transactionId}
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(params.user.phone, message);
   }
@@ -352,7 +355,7 @@ Bonjour ${params.user.name}, l'administrateur a rendu sa décision.
 
 Si vous avez des questions sur cette décision, répondez directement à ce message.
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(params.user.phone, message);
   }
@@ -375,7 +378,7 @@ Bonjour ${params.user.name}, votre transaction #${params.transactionId} attend v
 
 👉 ${this.appUrl()}/transactions/${params.transactionId}
 
-_SwapTrust_`;
+_DoniSend_`;
 
     await this.send(params.user.phone, message);
   }

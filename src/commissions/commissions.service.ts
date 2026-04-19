@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 
 export interface CommissionBreakdown {
   googleRate: number;
@@ -15,10 +16,13 @@ export interface CommissionBreakdown {
 
 @Injectable()
 export class CommissionsService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly settings: SettingsService,
+  ) {}
 
   getCommissionPercent(): number {
-    return this.config.get<number>('commission.platformPercent') ?? 2;
+    return this.settings.getCommissionPercent() ?? this.config.get<number>('commission.platformPercent') ?? 0;
   }
 
   /**

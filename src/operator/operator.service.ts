@@ -21,6 +21,7 @@ import { TakeRequestDto } from './dto/take-request.dto';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 import { formatCFA, formatRUB } from '../common/utils/format-money';
+import { CommissionsService } from '../commissions/commissions.service';
 
 const HOURS_24 = 24 * 60 * 60 * 1000;
 
@@ -32,6 +33,7 @@ export class OperatorService {
     private readonly requestsService: RequestsService,
     private readonly config: ConfigService,
     private readonly whatsapp: WhatsappService,
+    private readonly commissions: CommissionsService,
   ) {}
 
   listPendingRequests(filters: FilterRequestsDto) {
@@ -83,7 +85,7 @@ export class OperatorService {
     });
     if (!platformAccount) {
       throw new BadRequestException(
-        'Aucun compte SwapTrust actif pour cette méthode de paiement. Contactez l’administrateur.',
+        'Aucun compte DoniSend actif pour cette méthode de paiement. Contactez l’administrateur.',
       );
     }
 
@@ -92,7 +94,7 @@ export class OperatorService {
     const amountRub =
       request.type === RequestType.NEED_RUB ? request.amountWanted : request.amountToSend;
 
-    const commissionPct = this.config.get<number>('commission.platformPercent') ?? 2;
+    const commissionPct = this.commissions.getCommissionPercent();
     const grossAmount = request.amountToSend;
     const netAmount = grossAmount - request.commissionAmount;
 
@@ -140,7 +142,7 @@ export class OperatorService {
     await this.notifications.notify(request.clientId, {
       type: 'REQUEST_TAKEN',
       title: 'Votre demande est prise en charge !',
-      body: `Envoyez le montant exact sur le numéro SwapTrust ${platformAccount.accountName} — ne payez pas directement l’opérateur.`,
+      body: `Envoyez le montant exact sur le numéro DoniSend ${platformAccount.accountName} — ne payez pas directement l’opérateur.`,
       data: {
         transactionId: transaction.id,
         requestId: request.id,
@@ -232,7 +234,7 @@ export class OperatorService {
   }
 
   /**
-   * Étape 2 — L’opérateur confirme avoir reçu le virement net depuis SwapTrust (preuve interne).
+   * Étape 2 — L’opérateur confirme avoir reçu le virement net depuis DoniSend (preuve interne).
    */
   async confirmPlatformTransfer(
     transactionId: number,
@@ -244,7 +246,7 @@ export class OperatorService {
     this.assertAssignedOperator(t.operatorId, operatorId, role);
     if (t.status !== TransactionStatus.CLIENT_SENT) {
       throw new BadRequestException(
-        'Le client doit d’abord confirmer l’envoi vers le compte SwapTrust',
+        'Le client doit d’abord confirmer l’envoi vers le compte DoniSend',
       );
     }
     if (t.platformTransferredAt) {
@@ -268,7 +270,7 @@ export class OperatorService {
     await this.notifications.notify(t.clientId, {
       type: 'PLATFORM_TO_OPERATOR_DONE',
       title: 'Votre échange avance',
-      body: 'SwapTrust a reversé le montant net à l’opérateur. Vous recevrez vos roubles sous peu.',
+      body: 'DoniSend a reversé le montant net à l’opérateur. Vous recevrez vos roubles sous peu.',
       data: { transactionId },
     });
 
@@ -291,7 +293,7 @@ export class OperatorService {
     this.assertAssignedOperator(t.operatorId, operatorId, role);
     if (t.status !== TransactionStatus.OPERATOR_VERIFIED) {
       throw new BadRequestException(
-        'L’opérateur doit d’abord confirmer la réception du virement SwapTrust (étape intermédiaire)',
+        'L’opérateur doit d’abord confirmer la réception du virement DoniSend (étape intermédiaire)',
       );
     }
 

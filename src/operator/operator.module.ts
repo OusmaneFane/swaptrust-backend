@@ -5,9 +5,10 @@ import { RequestsModule } from '../requests/requests.module';
 import { UploadModule } from '../upload/upload.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
+import { CommissionsModule } from '../commissions/commissions.module';
 
 @Module({
-  imports: [RequestsModule, UploadModule, NotificationsModule, WhatsappModule],
+  imports: [RequestsModule, UploadModule, NotificationsModule, WhatsappModule, CommissionsModule],
   controllers: [OperatorController],
   providers: [OperatorService],
 })

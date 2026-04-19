@@ -12,7 +12,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequestsService } from './requests.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { KycVerifiedGuard } from '../common/guards/kyc-verified.guard';
 
 @ApiTags('Requests')
 @Controller('requests')
@@ -20,7 +19,6 @@ export class RequestsController {
   constructor(private readonly requests: RequestsService) {}
 
   @Post()
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Créer une demande d’échange' })
   create(@CurrentUser('id') clientId: number, @Body() dto: CreateRequestDto) {
@@ -42,7 +40,6 @@ export class RequestsController {
   }
 
   @Delete(':id')
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Annuler sa demande (PENDING uniquement)' })
   cancel(@CurrentUser('id') clientId: number, @Param('id', ParseIntPipe) id: number) {

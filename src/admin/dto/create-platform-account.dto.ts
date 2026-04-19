@@ -12,7 +12,7 @@ export class CreatePlatformAccountDto {
   @MaxLength(191)
   accountNumber: string;
 
-  @ApiProperty({ example: 'SwapTrust — Orange Money' })
+  @ApiProperty({ example: 'DoniSend — Orange Money' })
   @IsString()
   @MaxLength(191)
   accountName: string;

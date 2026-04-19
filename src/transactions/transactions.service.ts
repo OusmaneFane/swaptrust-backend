@@ -102,14 +102,14 @@ export class TransactionsService {
     await this.notifications.notifyAdmins({
       type: 'CLIENT_SENT_TO_PLATFORM',
       title: 'Virement client — à transférer à l’opérateur',
-      body: `Transaction #${transactionId} : fonds attendus sur SwapTrust. Transférer le net (${net.toString()} unités) vers l’opérateur.`,
+      body: `Transaction #${transactionId} : fonds attendus sur DoniSend. Transférer le net (${net.toString()} unités) vers l’opérateur.`,
       data: { transactionId },
     });
 
     await this.notifications.notify(t.operatorId, {
       type: 'CLIENT_PROOF_UPLOADED',
       title: 'Le client a envoyé ses fonds',
-      body: 'SwapTrust va vous reverser le montant net sous peu. Préparez l’envoi des roubles.',
+      body: 'DoniSend va vous reverser le montant net sous peu. Préparez l’envoi des roubles.',
       data: { transactionId },
     });
 

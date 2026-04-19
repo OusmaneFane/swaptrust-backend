@@ -12,13 +12,24 @@ import { CreatePlatformAccountDto } from './dto/create-platform-account.dto';
 import { UpdatePlatformAccountDto } from './dto/update-platform-account.dto';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private prisma: PrismaService,
     private readonly whatsapp: WhatsappService,
+    private readonly settings: SettingsService,
   ) {}
+
+  getCommissionPercent() {
+    return { percent: this.settings.getCommissionPercent() ?? 0 };
+  }
+
+  async updateCommissionPercent(percent: number) {
+    const p = await this.settings.setCommissionPercent(percent);
+    return { percent: p };
+  }
 
   async dashboard() {
     const [

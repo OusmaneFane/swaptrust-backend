@@ -32,7 +32,7 @@ exports.default = (function () {
             maxFileSize: parseInt((_k = process.env.MAX_FILE_SIZE) !== null && _k !== void 0 ? _k : '5242880', 10),
         },
         commission: {
-            platformPercent: parseFloat((_l = process.env.PLATFORM_COMMISSION_PERCENT) !== null && _l !== void 0 ? _l : '2'),
+            platformPercent: parseFloat((_l = process.env.PLATFORM_COMMISSION_PERCENT) !== null && _l !== void 0 ? _l : '0'),
             spreadPercent: parseFloat((_m = process.env.EXCHANGE_SPREAD_PERCENT) !== null && _m !== void 0 ? _m : '1'),
         },
     });

@@ -23,7 +23,6 @@ import { TransactionsService } from './transactions.service';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
 import { CreateDisputeDto } from '../disputes/dto/create-dispute.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { KycVerifiedGuard } from '../common/guards/kyc-verified.guard';
 import { UploadService } from '../upload/upload.service';
 
 @ApiTags('Transactions')
@@ -35,7 +34,6 @@ export class TransactionsController {
   ) {}
 
   @Get()
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Historique (client)' })
   list(@CurrentUser('id') userId: number, @Query() q: FilterTransactionsDto) {
@@ -43,7 +41,6 @@ export class TransactionsController {
   }
 
   @Get(':id')
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Détail' })
   one(@CurrentUser() user: Express.User, @Param('id', ParseIntPipe) id: number) {
@@ -51,7 +48,6 @@ export class TransactionsController {
   }
 
   @Post(':id/client-send')
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -74,7 +70,6 @@ export class TransactionsController {
   }
 
   @Post(':id/client-confirm')
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Confirmer réception → clôture' })
   clientConfirm(@CurrentUser('id') userId: number, @Param('id', ParseIntPipe) id: number) {
@@ -82,7 +77,6 @@ export class TransactionsController {
   }
 
   @Post(':id/dispute')
-  @UseGuards(KycVerifiedGuard)
   @ApiBearerAuth('access-token')
   @ApiOperation({ summary: 'Ouvrir un litige' })
   openDispute(

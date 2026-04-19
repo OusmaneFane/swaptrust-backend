@@ -44,7 +44,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   const config = new DocumentBuilder()
-    .setTitle('SwapTrust API')
+    .setTitle('DoniSend API')
     .setDescription("API d'échange sécurisé CFA ↔ Rouble")
     .setVersion('1.0')
     .addBearerAuth(
@@ -83,7 +83,7 @@ async function bootstrap() {
   const host = process.env.HOST ?? '0.0.0.0';
   await app.listen(port, host);
   const base = `http://127.0.0.1:${port}`;
-  logger.log(`SwapTrust API ${base}/api/v1`);
+  logger.log(`DoniSend API ${base}/api/v1`);
   logger.log(`Swagger UI ${base}/api/v1/docs`);
   logger.log(`Health ${base}/api/v1/health`);
 }

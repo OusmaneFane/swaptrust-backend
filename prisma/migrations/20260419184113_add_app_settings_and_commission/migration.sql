@@ -1,0 +1,12 @@
+-- AlterTable
+ALTER TABLE `users` MODIFY `kycStatus` ENUM('NOT_SUBMITTED', 'PENDING', 'VERIFIED', 'REJECTED') NOT NULL DEFAULT 'VERIFIED';
+
+-- CreateTable
+CREATE TABLE `app_settings` (
+    `key` VARCHAR(64) NOT NULL,
+    `value` VARCHAR(191) NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updatedAt` DATETIME(3) NOT NULL,
+
+    PRIMARY KEY (`key`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

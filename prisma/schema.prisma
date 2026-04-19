@@ -76,7 +76,7 @@ model User {
   phoneRussia          String?
   countryResidence     CountryResidence @default(MALI)
   avatar               String?
-  kycStatus            KycStatus        @default(NOT_SUBMITTED)
+  kycStatus            KycStatus        @default(VERIFIED)
   role                 UserRole         @default(CLIENT)
   isBanned             Boolean          @default(false)
   ratingAvg            Float            @default(0)
@@ -328,4 +328,13 @@ model NotificationPreference {
   updatedAt DateTime @updatedAt
 
   @@map("notification_preferences")
+}
+
+model AppSetting {
+  key       String   @id @db.VarChar(64)
+  value     String   @db.VarChar(191)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
 }

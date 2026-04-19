@@ -17,6 +17,7 @@ import { AdminService } from './admin.service';
 import { AssignRoleDto } from './dto/assign-role.dto';
 import { CreatePlatformAccountDto } from './dto/create-platform-account.dto';
 import { UpdatePlatformAccountDto } from './dto/update-platform-account.dto';
+import { UpdateCommissionDto } from './dto/update-commission.dto';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -105,9 +106,21 @@ export class AdminController {
   }
 
   @Get('platform-accounts')
-  @ApiOperation({ summary: '[Admin] Numéros de réception SwapTrust' })
+  @ApiOperation({ summary: '[Admin] Numéros de réception DoniSend' })
   listPlatformAccounts() {
     return this.admin.listPlatformAccounts();
+  }
+
+  @Get('settings/commission')
+  @ApiOperation({ summary: '[Admin] Lire la commission plateforme (%)' })
+  getCommission() {
+    return this.admin.getCommissionPercent();
+  }
+
+  @Put('settings/commission')
+  @ApiOperation({ summary: '[Admin] Mettre à jour la commission plateforme (%)' })
+  updateCommission(@Body() dto: UpdateCommissionDto) {
+    return this.admin.updateCommissionPercent(dto.percent);
   }
 
   @Post('platform-accounts')

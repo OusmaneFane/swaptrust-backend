@@ -100,7 +100,7 @@ var SmsService = function () {
                     switch (_a.label) {
                         case 0:
                             from = this.config.get('twilio.phoneNumber');
-                            body = "SwapTrust code: ".concat(code);
+                            body = "DoniSend code: ".concat(code);
                             if (!(this.client && from)) return [3 /*break*/, 2];
                             return [4 /*yield*/, this.client.messages.create({ to: phone, from: from, body: body })];
                         case 1:
