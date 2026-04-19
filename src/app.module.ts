@@ -23,6 +23,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { HealthModule } from './health/health.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     HealthModule,
     ProofsModule,
     WhatsappModule,
+    SettingsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

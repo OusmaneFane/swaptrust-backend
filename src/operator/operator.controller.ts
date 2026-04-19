@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -86,7 +85,6 @@ export class OperatorController {
     schema: {
       type: 'object',
       properties: { proof: { type: 'string', format: 'binary' } },
-      required: ['proof'],
     },
   })
   @UseInterceptors(
@@ -94,39 +92,21 @@ export class OperatorController {
   )
   @ApiOperation({
     summary:
-      'Confirmer réception du virement DoniSend → opérateur (preuve). Passe la transaction en OPERATOR_VERIFIED.',
+      'Confirmer réception du virement DoniSend → opérateur (preuve optionnelle). Passe la transaction en OPERATOR_VERIFIED.',
   })
   confirmPlatformTransfer(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: Express.User,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    if (!file) throw new BadRequestException('proof file required');
-    const proofUrl = this.upload.saveFile(file, 'proofs');
+    const proofUrl = file ? this.upload.saveFile(file, 'proofs') : null;
     return this.operatorService.confirmPlatformTransfer(id, user.id, user.role, proofUrl);
   }
 
   @Post('transactions/:id/send')
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: { proof: { type: 'string', format: 'binary' } },
-      required: ['proof'],
-    },
-  })
-  @UseInterceptors(
-    FileInterceptor('proof', { storage: memoryStorage(), limits: { fileSize: 5_242_880 } }),
-  )
-  @ApiOperation({ summary: 'Confirmer envoi opérateur + reçu' })
-  operatorSend(
-    @Param('id', ParseIntPipe) id: number,
-    @CurrentUser() user: Express.User,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    if (!file) throw new BadRequestException('proof file required');
-    const proofUrl = this.upload.saveFile(file, 'proofs');
-    return this.operatorService.confirmOperatorSend(id, user.id, user.role, proofUrl);
+  @ApiOperation({ summary: 'Confirmer envoi opérateur (sans preuve)' })
+  operatorSend(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: Express.User) {
+    return this.operatorService.confirmOperatorSend(id, user.id, user.role, null);
   }
 
   @Post('transactions/:id/note')

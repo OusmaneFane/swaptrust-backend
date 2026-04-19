@@ -240,7 +240,7 @@ export class OperatorService {
     transactionId: number,
     operatorId: number,
     role: UserRole,
-    proofUrl: string,
+    proofUrl: string | null,
   ) {
     const t = await this.prisma.transaction.findUniqueOrThrow({ where: { id: transactionId } });
     this.assertAssignedOperator(t.operatorId, operatorId, role);
@@ -257,7 +257,7 @@ export class OperatorService {
       await tx.transaction.update({
         where: { id: transactionId },
         data: {
-          platformToOperatorProofUrl: proofUrl,
+          platformToOperatorProofUrl: proofUrl ?? undefined,
           platformTransferredAt: new Date(),
           status: TransactionStatus.OPERATOR_VERIFIED,
         },
@@ -281,7 +281,7 @@ export class OperatorService {
     transactionId: number,
     operatorId: number,
     role: UserRole,
-    proofUrl: string,
+    proofUrl: string | null,
   ) {
     const t = await this.prisma.transaction.findUniqueOrThrow({
       where: { id: transactionId },
@@ -302,7 +302,7 @@ export class OperatorService {
         where: { id: transactionId },
         data: {
           status: TransactionStatus.OPERATOR_SENT,
-          operatorProofUrl: proofUrl,
+          operatorProofUrl: proofUrl ?? undefined,
           operatorSentAt: new Date(),
         },
       });

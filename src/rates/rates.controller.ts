@@ -2,11 +2,15 @@ import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 import { RatesService } from './rates.service';
+import { CommissionsService } from '../commissions/commissions.service';
 
 @ApiTags('Rates')
 @Controller('rates')
 export class RatesController {
-  constructor(private readonly rates: RatesService) {}
+  constructor(
+    private readonly rates: RatesService,
+    private readonly commissions: CommissionsService,
+  ) {}
 
   private round2(n: number): number {
     return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -27,6 +31,7 @@ export class RatesController {
       rubPerXof: this.round2(r.rubPerXof),
       rubPerXofWithSpread: this.round2(r.rubPerXofWithSpread),
       percentChange24h: this.round2(r.percentChange24h),
+      commissionPercent: this.round2(this.commissions.getCommissionPercent()),
     };
   }
 
