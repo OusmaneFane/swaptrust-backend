@@ -26,6 +26,7 @@
     "prisma:migrate": "pnpm run prisma -- migrate dev",
     "prisma:studio": "pnpm run prisma -- studio",
     "prisma:seed": "pnpm run prisma -- db seed",
+    "prisma:seed:admin": "cross-env SEED_ONLY=admin pnpm run prisma -- db seed",
     "docker:up": "docker compose up -d --build",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f api",

@@ -13,7 +13,8 @@ const prisma = new PrismaClient({
   adapter: new PrismaMariaDb(mysqlConnectionUrl(url)),
 });
 
-async function main() {
+/** Compte admin (rôle ADMIN) — seul bloc exécuté si `SEED_ONLY=admin`. */
+async function seedSuperAdmin() {
   const password = await bcrypt.hash('AdminSwapTrust123!', 12);
   await prisma.user.upsert({
     where: { email: 'admin@swaptrust.local' },
@@ -30,6 +31,19 @@ async function main() {
       kycStatus: 'VERIFIED',
     } as any,
   });
+}
+
+async function main() {
+  const seedOnly = (process.env.SEED_ONLY ?? '').trim().toLowerCase();
+  if (seedOnly === 'admin' || seedOnly === 'superadmin') {
+    await seedSuperAdmin();
+    console.log(
+      'Seed OK (admin uniquement): admin@swaptrust.local / AdminSwapTrust123!',
+    );
+    return;
+  }
+
+  await seedSuperAdmin();
 
   const userPass = await bcrypt.hash('UserDemo123!', 12);
   await prisma.user.upsert({
@@ -103,8 +117,8 @@ async function main() {
     }
   }
 
-  console.log('Seed OK: admin@swaptrust.local / AdminSwapTrust123!');
-  console.log('Seed OK: operator@swaptrust.local / OperatorSwapTrust123!');
+  console.log('Seed OK (complet): admin@swaptrust.local / AdminSwapTrust123!');
+  console.log('Seed OK (complet): operator@swaptrust.local / OperatorSwapTrust123!');
 }
 
 main()
