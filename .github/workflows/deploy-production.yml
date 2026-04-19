@@ -1,10 +1,3 @@
-# Push sur main → image GHCR :production (+ :sha-…) → déploiement SSH (environnement GitHub `production`).
-#
-# Environnement GitHub `production` — secrets :
-#   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY, GHCR_USERNAME, GHCR_READ_TOKEN
-#   ENV_FILE = contenu brut complet du .env prod (secret multiligne)
-# Variable : DEPLOY_PATH (chemin absolu sur le serveur).
-
 name: Deploy production
 
 on:
