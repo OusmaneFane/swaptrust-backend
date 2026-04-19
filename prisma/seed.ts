@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PaymentMethod, PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import bcrypt from 'bcryptjs';
 
 const url = process.env.DATABASE_URL;
@@ -7,9 +8,21 @@ if (!url) {
   throw new Error('DATABASE_URL is required for seed');
 }
 
-// Seed doit fonctionner dans l'image Docker (qui n'embarque pas `src/`).
-// On utilise PrismaClient standard : DATABASE_URL est déjà dans l'environnement.
-const prisma = new PrismaClient();
+function mysqlConnectionUrl(rawUrl: string): string {
+  // MySQL 8 (caching_sha2_password) : sans TLS, le client doit pouvoir récupérer la clé RSA
+  // du serveur, sinon erreur « RSA public key is not available client side » + pool timeout.
+  if (!/^mysql:\/\//i.test(rawUrl)) return rawUrl;
+  if (/[?&]allowPublicKeyRetrieval=/i.test(rawUrl)) return rawUrl;
+  return rawUrl.includes('?')
+    ? `${rawUrl}&allowPublicKeyRetrieval=true`
+    : `${rawUrl}?allowPublicKeyRetrieval=true`;
+}
+
+// Le projet utilise Prisma Driver Adapters (MariaDB/MySQL) : le client nécessite un adapter.
+// On duplique la logique minimale ici (seed doit fonctionner dans l'image Docker sans `src/`).
+const prisma = new PrismaClient({
+  adapter: new PrismaMariaDb(mysqlConnectionUrl(url)),
+});
 
 /** Compte admin (rôle ADMIN) — seul bloc exécuté si `SEED_ONLY=admin`. */
 async function seedSuperAdmin() {
@@ -116,7 +129,9 @@ async function main() {
   }
 
   console.log('Seed OK (complet): admin@swaptrust.local / AdminSwapTrust123!');
-  console.log('Seed OK (complet): operator@swaptrust.local / OperatorSwapTrust123!');
+  console.log(
+    'Seed OK (complet): operator@swaptrust.local / OperatorSwapTrust123!',
+  );
 }
 
 main()
