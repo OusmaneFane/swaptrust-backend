@@ -1,24 +1,16 @@
-# Déploiement serveur : image publiée par la CI (GHCR).
-# Le fichier .env est copié sur le serveur par la CI à partir du secret d’environnement GitHub ENV_FILE
-# (contenu brut multiligne, identique à ton .env local).
-# Exemple :
-#   export API_IMAGE=ghcr.io/org/swap-trust-backend:staging
-#   docker compose -f docker-compose.prod.yml pull api
-#   docker compose -f docker-compose.prod.yml up -d api
-
 services:
   api:
-    image: ${API_IMAGE:?Set API_IMAGE to the full ghcr.io/... image reference}
+    image: ${API_IMAGE}
     restart: unless-stopped
-    # Depuis le conteneur : accès MySQL / Redis sur la machine hôte (DATABASE_URL / REDIS_HOST = host.docker.internal).
+
     extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - "host.docker.internal:host-gateway"
+
     ports:
-      - '${API_PORT:-3001}:3001'
+      - "${API_PORT:-3001}:3001"
+
     env_file:
       - .env
+
     volumes:
       - uploads_data:/app/uploads
-
-volumes:
-  uploads_data:
