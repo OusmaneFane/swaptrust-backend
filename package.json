@@ -122,7 +122,7 @@
     "testEnvironment": "node"
   },
   "prisma": {
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "node ./node_modules/ts-node/dist/bin.js --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
   },
   "pnpm": {
     "overrides": {
