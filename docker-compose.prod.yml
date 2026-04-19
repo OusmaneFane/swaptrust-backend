@@ -1,16 +1,9 @@
 services:
   api:
     image: ${API_IMAGE}
-    restart: unless-stopped
-
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-    ports:
-      - "${API_PORT:-3001}:3001"
+    network_mode: host
 
     env_file:
       - .env
 
-    volumes:
-      - uploads_data:/app/uploads
+    restart: unless-stopped
