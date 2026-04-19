@@ -1,17 +1,15 @@
 import 'dotenv/config';
 import { PaymentMethod, PrismaClient } from '@prisma/client';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import bcrypt from 'bcryptjs';
-import { mysqlConnectionUrl } from '../src/prisma/mysql-connection-url';
 
 const url = process.env.DATABASE_URL;
 if (!url) {
   throw new Error('DATABASE_URL is required for seed');
 }
 
-const prisma = new PrismaClient({
-  adapter: new PrismaMariaDb(mysqlConnectionUrl(url)),
-});
+// Seed doit fonctionner dans l'image Docker (qui n'embarque pas `src/`).
+// On utilise PrismaClient standard : DATABASE_URL est déjà dans l'environnement.
+const prisma = new PrismaClient();
 
 /** Compte admin (rôle ADMIN) — seul bloc exécuté si `SEED_ONLY=admin`. */
 async function seedSuperAdmin() {
