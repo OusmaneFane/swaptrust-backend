@@ -338,3 +338,17 @@ model AppSetting {
 
   @@map("app_settings")
 }
+
+model CommissionPromo {
+  id        Int      @id @default(autoincrement())
+  /** Pourcentage de commission promo (ex. 1 = 1%) */
+  percent   Decimal  @db.Decimal(5, 2)
+  startsAt  DateTime @default(now())
+  endsAt    DateTime
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+  @@map("commission_promos")
+}

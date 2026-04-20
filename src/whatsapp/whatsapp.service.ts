@@ -78,7 +78,7 @@ export class WhatsappService {
   }
 
   async sendWelcome(user: { name: string; phone: string }): Promise<void> {
-    const commissionPct = this.commissions.getCommissionPercent();
+    const commissionPct = await this.commissions.getCommissionEffectivePercent();
     const message = `✅ *Bienvenue sur DoniSend, ${user.name} !*
 
 Votre compte a été créé avec succès.

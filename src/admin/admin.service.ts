@@ -23,12 +23,43 @@ export class AdminService {
   ) {}
 
   getCommissionPercent() {
-    return { percent: this.settings.getCommissionPercent() ?? 0 };
+    return { percent: this.settings.getCommissionBasePercent() ?? 0 };
   }
 
   async updateCommissionPercent(percent: number) {
-    const p = await this.settings.setCommissionPercent(percent);
+    const p = await this.settings.setCommissionBasePercent(percent);
     return { percent: p };
+  }
+
+  async getCommissionPublicConfig() {
+    const c = await this.settings.getCommissionPublicConfig();
+    return {
+      basePercent: c.basePercent,
+      promoPercent: c.promoPercent,
+      promoEndsAt: c.promoEndsAt,
+      effectivePercent: c.effectivePercent,
+      isPromoActive: c.isPromoActive,
+    };
+  }
+
+  async createCommissionPromo(percent: number, endsAtIso: string, startsAtIso?: string) {
+    const endsAt = new Date(endsAtIso);
+    const startsAt = startsAtIso ? new Date(startsAtIso) : undefined;
+    if (!Number.isFinite(endsAt.getTime())) throw new BadRequestException('endsAt invalide');
+    if (startsAt && !Number.isFinite(startsAt.getTime())) throw new BadRequestException('startsAt invalide');
+    if (endsAt.getTime() <= Date.now()) throw new BadRequestException('endsAt doit être dans le futur');
+    if (startsAt && startsAt.getTime() >= endsAt.getTime()) {
+      throw new BadRequestException('startsAt doit être avant endsAt');
+    }
+    return this.settings.createCommissionPromo(percent, endsAt, startsAt);
+  }
+
+  async deactivateCommissionPromo(id: number) {
+    try {
+      return await this.settings.deactivateCommissionPromo(id);
+    } catch {
+      throw new NotFoundException();
+    }
   }
 
   async dashboard() {

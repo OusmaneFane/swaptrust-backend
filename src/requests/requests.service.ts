@@ -63,7 +63,11 @@ export class RequestsService {
     }
 
     const sendCurrency = dto.type === RequestType.NEED_RUB ? 'XOF' : 'RUB';
-    const breakdown = this.commissions.calculate(Number(amountToSendBase), googleRate, sendCurrency);
+    const breakdown = await this.commissions.calculate(
+      Number(amountToSendBase),
+      googleRate,
+      sendCurrency,
+    );
     const commission = BigInt(breakdown.commissionAmount);
     const amountToSendTotal = BigInt(breakdown.totalToSend);
     const expiresAt = new Date(Date.now() + PENDING_TTL_MS);

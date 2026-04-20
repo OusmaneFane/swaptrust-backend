@@ -365,14 +365,14 @@ export class RatesService {
         googleRate: 1,
         commission: 0,
         total: amount,
-        commissionPercent: this.commissions.getCommissionPercent(),
+        commissionPercent: this.commissions.getCommissionBasePercent(),
       };
     }
 
     const { rate: googleRate } = await this.getCurrentRate();
 
     if (from === 'XOF' && to === 'RUB') {
-      const b = this.commissions.calculate(amount, googleRate, 'XOF');
+      const b = await this.commissions.calculate(amount, googleRate, 'XOF');
       return {
         ...b,
         result: b.clientReceives,
@@ -382,7 +382,7 @@ export class RatesService {
       };
     }
 
-    const b = this.commissions.calculate(amount, googleRate, 'RUB');
+    const b = await this.commissions.calculate(amount, googleRate, 'RUB');
     return {
       ...b,
       result: b.clientReceives,

@@ -94,7 +94,7 @@ export class OperatorService {
     const amountRub =
       request.type === RequestType.NEED_RUB ? request.amountWanted : request.amountToSend;
 
-    const commissionPct = this.commissions.getCommissionPercent();
+    const commissionPct = this.commissions.getCommissionBasePercent();
     const grossAmount = request.amountToSend;
     const netAmount = grossAmount - request.commissionAmount;
 

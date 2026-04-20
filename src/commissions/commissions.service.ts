@@ -21,20 +21,25 @@ export class CommissionsService {
     private readonly settings: SettingsService,
   ) {}
 
-  getCommissionPercent(): number {
-    return this.settings.getCommissionPercent() ?? this.config.get<number>('commission.platformPercent') ?? 0;
+  getCommissionBasePercent(): number {
+    return this.settings.getCommissionBasePercent() ?? this.config.get<number>('commission.platformPercent') ?? 0;
+  }
+
+  async getCommissionEffectivePercent(): Promise<number> {
+    const { effectivePercent } = await this.settings.getCommissionPublicConfig();
+    return effectivePercent;
   }
 
   /**
    * @param requestedAmount — montant net (avant commission), en centimes / kopecks
    * @param googleRate — 1 XOF = googleRate RUB
    */
-  calculate(
+  async calculate(
     requestedAmount: number,
     googleRate: number,
     sendCurrency: 'XOF' | 'RUB' = 'XOF',
-  ): CommissionBreakdown {
-    const commissionPercent = this.getCommissionPercent();
+  ): Promise<CommissionBreakdown> {
+    const commissionPercent = await this.getCommissionEffectivePercent();
     const commissionAmount = Math.round((requestedAmount * commissionPercent) / 100);
     const totalToSend = requestedAmount + commissionAmount;
     const netToOperator = requestedAmount;

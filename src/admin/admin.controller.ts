@@ -18,6 +18,7 @@ import { AssignRoleDto } from './dto/assign-role.dto';
 import { CreatePlatformAccountDto } from './dto/create-platform-account.dto';
 import { UpdatePlatformAccountDto } from './dto/update-platform-account.dto';
 import { UpdateCommissionDto } from './dto/update-commission.dto';
+import { CreateCommissionPromoDto } from './dto/create-commission-promo.dto';
 import { AdminGuard } from '../common/guards/admin.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -121,6 +122,24 @@ export class AdminController {
   @ApiOperation({ summary: '[Admin] Mettre à jour la commission plateforme (%)' })
   updateCommission(@Body() dto: UpdateCommissionDto) {
     return this.admin.updateCommissionPercent(dto.percent);
+  }
+
+  @Get('settings/commission/config')
+  @ApiOperation({ summary: '[Admin] Lire la commission (base + promo + effective)' })
+  getCommissionConfig() {
+    return this.admin.getCommissionPublicConfig();
+  }
+
+  @Post('settings/commission/promo')
+  @ApiOperation({ summary: '[Admin] Créer une promo commission (avec date de fin)' })
+  createCommissionPromo(@Body() dto: CreateCommissionPromoDto) {
+    return this.admin.createCommissionPromo(dto.percent, dto.endsAt, dto.startsAt);
+  }
+
+  @Delete('settings/commission/promo/:id')
+  @ApiOperation({ summary: '[Admin] Désactiver une promo commission' })
+  deactivateCommissionPromo(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.deactivateCommissionPromo(id);
   }
 
   @Post('platform-accounts')

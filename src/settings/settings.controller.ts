@@ -11,9 +11,14 @@ export class SettingsController {
   @Public()
   @Get('public')
   @ApiOperation({ summary: 'Paramètres publics pour le frontend (landing, estimation, etc.)' })
-  getPublic() {
+  async getPublic() {
+    const commission = await this.settings.getCommissionPublicConfig();
     return {
-      commissionPercent: this.settings.getCommissionPercent() ?? 0,
+      commissionBasePercent: commission.basePercent,
+      commissionPromoPercent: commission.promoPercent,
+      commissionPromoEndsAt: commission.promoEndsAt,
+      commissionPercent: commission.effectivePercent,
+      isCommissionPromoActive: commission.isPromoActive,
     };
   }
 }

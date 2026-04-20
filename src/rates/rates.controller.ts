@@ -31,7 +31,7 @@ export class RatesController {
       rubPerXof: this.round2(r.rubPerXof),
       rubPerXofWithSpread: this.round2(r.rubPerXofWithSpread),
       percentChange24h: this.round2(r.percentChange24h),
-      commissionPercent: this.round2(this.commissions.getCommissionPercent()),
+      commissionPercent: this.round2(await this.commissions.getCommissionEffectivePercent()),
     };
   }
 

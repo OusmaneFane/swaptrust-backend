@@ -202,7 +202,7 @@ export class TransactionsService {
       },
     });
     // "1 000 CFA" est volontaire : ça évite d'afficher un taux trop petit (ex. 0.14 RUB) en WhatsApp.
-    const commissionPct = this.commissions.getCommissionPercent();
+    const commissionPct = await this.commissions.getCommissionEffectivePercent();
     const rateStr = `Taux Google: 1 000 CFA = ${(Number(done.rate) * 1000).toFixed(2)} ₽ • Commission: ${commissionPct}%`;
     let amountSent: string;
     let amountReceived: string;
