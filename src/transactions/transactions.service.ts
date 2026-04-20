@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RequestStatus, RequestType, TransactionStatus, UserRole } from '@prisma/client';
+import {
+  Prisma,
+  RequestStatus,
+  RequestType,
+  TransactionStatus,
+  UserRole,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FilterTransactionsDto } from './dto/filter-transactions.dto';
@@ -12,6 +18,7 @@ import { CreateDisputeDto } from '../disputes/dto/create-dispute.dto';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 import { formatCFA, formatRUB } from '../common/utils/format-money';
+import { CommissionsService } from '../commissions/commissions.service';
 
 @Injectable()
 export class TransactionsService {
@@ -19,11 +26,13 @@ export class TransactionsService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly whatsapp: WhatsappService,
+    private readonly commissions: CommissionsService,
   ) {}
 
   private periodStart(period?: string) {
     if (period === '7d') return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    if (period === '30d') return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    if (period === '30d')
+      return new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     return undefined;
   }
 
@@ -55,14 +64,20 @@ export class TransactionsService {
       include: {
         request: true,
         client: { select: { id: true, name: true, email: true, avatar: true } },
-        operator: { select: { id: true, name: true, email: true, avatar: true, role: true } },
+        operator: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+            role: true,
+          },
+        },
         platformAccount: true,
         messages: { take: 50, orderBy: { createdAt: 'desc' } },
         dispute: true,
         review: true,
-        ...(staff
-          ? { operatorLogs: { orderBy: { createdAt: 'asc' } } }
-          : {}),
+        ...(staff ? { operatorLogs: { orderBy: { createdAt: 'asc' } } } : {}),
       },
     });
     if (!t) throw new NotFoundException();
@@ -77,9 +92,17 @@ export class TransactionsService {
     return t;
   }
 
-  async clientConfirmSend(transactionId: number, clientId: number, proofUrl: string | null) {
+  async clientConfirmSend(
+    transactionId: number,
+    clientId: number,
+    proofUrl: string | null,
+  ) {
     const t = await this.prisma.transaction.findFirst({
-      where: { id: transactionId, clientId, status: TransactionStatus.INITIATED },
+      where: {
+        id: transactionId,
+        clientId,
+        status: TransactionStatus.INITIATED,
+      },
     });
     if (!t) throw new NotFoundException();
 
@@ -120,7 +143,9 @@ export class TransactionsService {
     if (user) {
       const gross =
         full.grossAmount ??
-        (full.request?.type === RequestType.NEED_CFA ? full.amountRub : full.amountCfa);
+        (full.request?.type === RequestType.NEED_CFA
+          ? full.amountRub
+          : full.amountCfa);
       const grossLabel =
         full.request?.type === RequestType.NEED_CFA
           ? formatRUB(Number(gross))
@@ -139,7 +164,11 @@ export class TransactionsService {
 
   async clientConfirmReceive(transactionId: number, clientId: number) {
     const t = await this.prisma.transaction.findFirst({
-      where: { id: transactionId, clientId, status: TransactionStatus.OPERATOR_SENT },
+      where: {
+        id: transactionId,
+        clientId,
+        status: TransactionStatus.OPERATOR_SENT,
+      },
     });
     if (!t) throw new NotFoundException();
 
@@ -172,7 +201,9 @@ export class TransactionsService {
         client: { select: { name: true, phoneMali: true, phoneRussia: true } },
       },
     });
-    const rateStr = `1 000 CFA = ${(Number(done.rate) * 1000).toFixed(2)} ₽`;
+    // "1 000 CFA" est volontaire : ça évite d'afficher un taux trop petit (ex. 0.14 RUB) en WhatsApp.
+    const commissionPct = this.commissions.getCommissionPercent();
+    const rateStr = `Taux Google: 1 000 CFA = ${(Number(done.rate) * 1000).toFixed(2)} ₽ • Commission: ${commissionPct}%`;
     let amountSent: string;
     let amountReceived: string;
     if (done.request.type === RequestType.NEED_RUB) {
@@ -200,7 +231,11 @@ export class TransactionsService {
     return this.getOne(transactionId, clientId, UserRole.CLIENT);
   }
 
-  async openDispute(transactionId: number, userId: number, dto: CreateDisputeDto) {
+  async openDispute(
+    transactionId: number,
+    userId: number,
+    dto: CreateDisputeDto,
+  ) {
     const t = await this.prisma.transaction.findFirst({
       where: {
         id: transactionId,
@@ -214,7 +249,9 @@ export class TransactionsService {
     ) {
       throw new BadRequestException('Transaction non éligible au litige');
     }
-    const existing = await this.prisma.dispute.findUnique({ where: { transactionId } });
+    const existing = await this.prisma.dispute.findUnique({
+      where: { transactionId },
+    });
     if (existing) throw new BadRequestException('Un litige existe déjà');
 
     const dispute = await this.prisma.$transaction(async (tx) => {
@@ -262,8 +299,7 @@ export class TransactionsService {
       ),
     );
 
-    const role =
-      t.clientId === userId ? UserRole.CLIENT : UserRole.OPERATOR;
+    const role = t.clientId === userId ? UserRole.CLIENT : UserRole.OPERATOR;
     return this.getOne(transactionId, userId, role);
   }
 }

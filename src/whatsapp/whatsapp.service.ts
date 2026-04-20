@@ -17,7 +17,8 @@ export class WhatsappService {
     private readonly http: HttpService,
     private readonly commissions: CommissionsService,
   ) {
-    this.baseUrl = this.config.get<string>('notifml.baseUrl') ?? 'https://api.notif.ml';
+    this.baseUrl =
+      this.config.get<string>('notifml.baseUrl') ?? 'https://api.notif.ml';
     this.apiKey = this.config.get<string>('notifml.apiKey') ?? '';
     this.sandbox = this.config.get<boolean>('notifml.sandbox') ?? false;
   }
@@ -67,7 +68,9 @@ export class WhatsappService {
         }),
       );
 
-      this.logger.log(`WhatsApp OK ${phone}${this.sandbox ? ' [SANDBOX]' : ''}`);
+      this.logger.log(
+        `WhatsApp OK ${phone}${this.sandbox ? ' [SANDBOX]' : ''}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Échec WhatsApp vers ${phone}: ${msg}`);
@@ -265,7 +268,7 @@ Félicitations ${params.user.name}, votre transaction est clôturée avec succè
 📊 *Récapitulatif :*
 • Envoyé : *${params.amountSent}*
 • Reçu : *${params.amountReceived}*
-• Taux : ${params.rate}
+• Taux & commission : ${params.rate}
 
 ⭐ *Donnez votre avis* sur cet échange dans l'application — cela aide toute la communauté.
 
