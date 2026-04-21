@@ -80,23 +80,33 @@ async function bootstrap() {
   const swaggerUser = process.env.SWAGGER_USER ?? '';
   const swaggerPass = process.env.SWAGGER_PASSWORD ?? '';
   if (swaggerUser && swaggerPass) {
-    expressApp.use(['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'], (req: Request, res: Response, next: () => void) => {
+    expressApp.use(
+      ['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'],
+      (req: Request, res: Response, next: () => void) => {
       const header = req.headers.authorization ?? '';
       const [scheme, encoded] = header.split(' ');
-      if (scheme !== 'Basic' || !encoded) {
-        res.setHeader('WWW-Authenticate', 'Basic realm="DoniSend API Docs"');
-        return res.status(401).send('Authentication required');
+      let user = '';
+      let pass = '';
+      if (scheme === 'Basic' && encoded) {
+        const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+        const idx = decoded.indexOf(':');
+        user = idx >= 0 ? decoded.slice(0, idx) : decoded;
+        pass = idx >= 0 ? decoded.slice(idx + 1) : '';
+      } else {
+        // Optional URL-based access (useful for tools / quick access):
+        // /api/v1/docs?u=...&p=...
+        // NOTE: still only works if SWAGGER_USER/SWAGGER_PASSWORD are set.
+        const q = (req as unknown as { query?: Record<string, unknown> }).query ?? {};
+        user = typeof q.u === 'string' ? q.u : '';
+        pass = typeof q.p === 'string' ? q.p : '';
       }
-      const decoded = Buffer.from(encoded, 'base64').toString('utf8');
-      const idx = decoded.indexOf(':');
-      const user = idx >= 0 ? decoded.slice(0, idx) : decoded;
-      const pass = idx >= 0 ? decoded.slice(idx + 1) : '';
       if (user !== swaggerUser || pass !== swaggerPass) {
         res.setHeader('WWW-Authenticate', 'Basic realm="DoniSend API Docs"');
         return res.status(401).send('Invalid credentials');
       }
       return next();
-    });
+      },
+    );
   } else {
     logger.warn('Swagger docs not protected: set SWAGGER_USER and SWAGGER_PASSWORD to enable Basic Auth');
   }
