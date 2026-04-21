@@ -136,6 +136,12 @@ export class AdminController {
     return this.admin.createCommissionPromo(dto.percent, dto.endsAt, dto.startsAt);
   }
 
+  @Get('settings/commission/promo')
+  @ApiOperation({ summary: '[Admin] Lister les promos commission' })
+  listCommissionPromos(@Query('onlyActive') onlyActive?: string) {
+    return this.admin.listCommissionPromos(onlyActive === 'true');
+  }
+
   @Delete('settings/commission/promo/:id')
   @ApiOperation({ summary: '[Admin] Désactiver une promo commission' })
   deactivateCommissionPromo(@Param('id', ParseIntPipe) id: number) {

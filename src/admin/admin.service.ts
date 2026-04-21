@@ -62,6 +62,10 @@ export class AdminService {
     }
   }
 
+  async listCommissionPromos(onlyActive?: boolean) {
+    return this.settings.listCommissionPromos({ onlyActive });
+  }
+
   async dashboard() {
     const [
       users,

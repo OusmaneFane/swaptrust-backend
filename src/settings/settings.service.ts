@@ -90,6 +90,26 @@ export class SettingsService implements OnModuleInit {
     return promo;
   }
 
+  async listCommissionPromos(params?: { onlyActive?: boolean }) {
+    const now = new Date();
+    const rows = await this.prisma.commissionPromo.findMany({
+      where: params?.onlyActive
+        ? { isActive: true, endsAt: { gt: now } }
+        : undefined,
+      orderBy: [{ isActive: 'desc' }, { endsAt: 'desc' }, { id: 'desc' }],
+      take: 100,
+      select: { id: true, percent: true, startsAt: true, endsAt: true, isActive: true },
+    });
+    return rows.map((p) => ({
+      id: p.id,
+      percent: p.percent.toNumber(),
+      startsAt: p.startsAt.toISOString(),
+      endsAt: p.endsAt.toISOString(),
+      isActive: p.isActive,
+      isCurrentlyInWindow: p.startsAt <= now && p.endsAt > now && p.isActive,
+    }));
+  }
+
   async getCommissionPublicConfig(): Promise<CommissionPublicConfig> {
     const basePercent = this.getCommissionBasePercent() ?? 0;
     const promo = await this.getActiveCommissionPromo();

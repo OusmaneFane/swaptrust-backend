@@ -75,6 +75,32 @@ async function bootstrap() {
   });
 
   const expressApp = app.getHttpAdapter().getInstance();
+
+  // Protect Swagger UI with HTTP Basic Auth (optional if env not set)
+  const swaggerUser = process.env.SWAGGER_USER ?? '';
+  const swaggerPass = process.env.SWAGGER_PASSWORD ?? '';
+  if (swaggerUser && swaggerPass) {
+    expressApp.use(['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'], (req: Request, res: Response, next: () => void) => {
+      const header = req.headers.authorization ?? '';
+      const [scheme, encoded] = header.split(' ');
+      if (scheme !== 'Basic' || !encoded) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="DoniSend API Docs"');
+        return res.status(401).send('Authentication required');
+      }
+      const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+      const idx = decoded.indexOf(':');
+      const user = idx >= 0 ? decoded.slice(0, idx) : decoded;
+      const pass = idx >= 0 ? decoded.slice(idx + 1) : '';
+      if (user !== swaggerUser || pass !== swaggerPass) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="DoniSend API Docs"');
+        return res.status(401).send('Invalid credentials');
+      }
+      return next();
+    });
+  } else {
+    logger.warn('Swagger docs not protected: set SWAGGER_USER and SWAGGER_PASSWORD to enable Basic Auth');
+  }
+
   expressApp.get(['/api/docs', '/api/docs/'], (_req: Request, res: Response) => {
     res.redirect(301, '/api/v1/docs');
   });
