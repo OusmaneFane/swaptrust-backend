@@ -79,6 +79,7 @@ async function bootstrap() {
   // Protect Swagger UI with HTTP Basic Auth (optional if env not set)
   const swaggerUser = process.env.SWAGGER_USER ?? '';
   const swaggerPass = process.env.SWAGGER_PASSWORD ?? '';
+  const isProd = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
   if (swaggerUser && swaggerPass) {
     expressApp.use(
       ['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'],
@@ -108,7 +109,19 @@ async function bootstrap() {
       },
     );
   } else {
-    logger.warn('Swagger docs not protected: set SWAGGER_USER and SWAGGER_PASSWORD to enable Basic Auth');
+    if (isProd) {
+      // Fail-closed in production: don't expose Swagger publicly if credentials are missing.
+      expressApp.use(['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'], (_req: Request, res: Response) =>
+        res.status(403).send('Swagger disabled (missing SWAGGER_USER/SWAGGER_PASSWORD)'),
+      );
+      logger.warn(
+        'Swagger disabled in production: missing SWAGGER_USER/SWAGGER_PASSWORD',
+      );
+    } else {
+      logger.warn(
+        'Swagger docs not protected: set SWAGGER_USER and SWAGGER_PASSWORD to enable Basic Auth',
+      );
+    }
   }
 
   expressApp.get(['/api/docs', '/api/docs/'], (_req: Request, res: Response) => {
