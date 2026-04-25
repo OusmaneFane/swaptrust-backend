@@ -201,7 +201,6 @@ export class OperatorService {
         request: true,
         platformAccount: true,
         client: { select: { id: true, name: true, phoneMali: true, phoneRussia: true } },
-        operatorLogs: { orderBy: { createdAt: 'desc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -223,7 +222,6 @@ export class OperatorService {
         },
         operator: { select: { id: true, name: true, role: true } },
         platformAccount: true,
-        operatorLogs: { orderBy: { createdAt: 'asc' } },
         messages: { orderBy: { createdAt: 'asc' } },
         dispute: true,
       },
@@ -334,6 +332,78 @@ export class OperatorService {
       })
       .catch(() => {});
 
+    return this.getTransactionDetail(transactionId, operatorId, role);
+  }
+
+  /**
+   * Upload / mise à jour du reçu d'envoi opérateur (preuve) après coup.
+   * Utile si le frontend a validé "send" sans multipart ou si l'opérateur veut ajouter un PDF plus tard.
+   */
+  async uploadOperatorProof(
+    transactionId: number,
+    operatorId: number,
+    role: UserRole,
+    proofUrl: string,
+  ) {
+    const t = await this.prisma.transaction.findUniqueOrThrow({
+      where: { id: transactionId },
+      select: { id: true, operatorId: true, status: true },
+    });
+    this.assertAssignedOperator(t.operatorId, operatorId, role);
+    if (
+      t.status !== TransactionStatus.OPERATOR_VERIFIED &&
+      t.status !== TransactionStatus.OPERATOR_SENT &&
+      t.status !== TransactionStatus.COMPLETED
+    ) {
+      throw new BadRequestException(
+        'Preuve opérateur non autorisée à ce stade (attendu: OPERATOR_VERIFIED/OPERATOR_SENT/COMPLETED)',
+      );
+    }
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: { operatorProofUrl: proofUrl },
+    });
+    await this.prisma.operatorLog.create({
+      data: { transactionId, operatorId, action: 'OPERATOR_PROOF_UPLOADED' },
+    });
+    return this.getTransactionDetail(transactionId, operatorId, role);
+  }
+
+  /**
+   * Upload / mise à jour du reçu interne "plateforme → opérateur" après coup.
+   */
+  async uploadPlatformTransferProof(
+    transactionId: number,
+    operatorId: number,
+    role: UserRole,
+    proofUrl: string,
+  ) {
+    const t = await this.prisma.transaction.findUniqueOrThrow({
+      where: { id: transactionId },
+      select: { id: true, operatorId: true, status: true, platformTransferredAt: true },
+    });
+    this.assertAssignedOperator(t.operatorId, operatorId, role);
+    if (!t.platformTransferredAt) {
+      throw new BadRequestException(
+        'Transfert plateforme → opérateur non confirmé (uploader la preuve après la confirmation)',
+      );
+    }
+    if (
+      t.status !== TransactionStatus.OPERATOR_VERIFIED &&
+      t.status !== TransactionStatus.OPERATOR_SENT &&
+      t.status !== TransactionStatus.COMPLETED
+    ) {
+      throw new BadRequestException(
+        'Preuve plateforme → opérateur non autorisée à ce stade',
+      );
+    }
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: { platformToOperatorProofUrl: proofUrl },
+    });
+    await this.prisma.operatorLog.create({
+      data: { transactionId, operatorId, action: 'PLATFORM_TO_OPERATOR_PROOF_UPLOADED' },
+    });
     return this.getTransactionDetail(transactionId, operatorId, role);
   }
 

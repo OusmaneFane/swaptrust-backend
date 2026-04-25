@@ -94,11 +94,29 @@ model User {
   messages               Message[]
   notifications          Notification[]
   notificationPrefs      NotificationPreference?
+  passwordResetTokens    PasswordResetToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /** SHA-256 hex du token envoyé au client */
+  tokenHash String   @unique @db.VarChar(64)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model KycDocument {

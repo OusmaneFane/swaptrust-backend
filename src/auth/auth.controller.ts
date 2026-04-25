@@ -6,6 +6,7 @@ import {
   HttpStatus,
   UseGuards,
   Get,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,6 +24,8 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RefreshDto } from './dto/refresh.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -60,6 +63,30 @@ export class AuthController {
   @ApiOperation({ summary: 'Vérifier un OTP SMS' })
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto.phone, dto.code);
+  }
+
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mot de passe oublié (envoi WhatsApp du lien)' })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Public()
+  @Get('password/reset/validate')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Valider un token de reset password' })
+  validateResetToken(@Query('token') token: string) {
+    return this.authService.validatePasswordResetToken(token);
+  }
+
+  @Public()
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Réinitialiser le mot de passe' })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.newPassword);
   }
 
   @ApiBearerAuth('access-token')

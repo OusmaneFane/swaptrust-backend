@@ -2,6 +2,13 @@ export default () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3001', 10),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  api: {
+    /**
+     * URL publique du backend (utilisée pour construire des liens média WhatsApp).
+     * Exemple: https://api.swaptrust.com
+     */
+    publicUrl: process.env.API_PUBLIC_URL ?? process.env.PUBLIC_API_URL ?? 'http://localhost:3001',
+  },
   /** Liens dans les messages (WhatsApp, emails) */
   app: {
     url: process.env.APP_URL ?? process.env.FRONTEND_URL ?? 'https://swaptrust.com',

@@ -8,9 +8,9 @@ import {
   ParseIntPipe,
   UseGuards,
   UseInterceptors,
-  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import {
   ApiBearerAuth,
@@ -53,19 +53,36 @@ export class TransactionsController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: { proof: { type: 'string', format: 'binary' } },
+      properties: {
+        proof: { type: 'string', format: 'binary' },
+        file: { type: 'string', format: 'binary' },
+        receipt: { type: 'string', format: 'binary' },
+      },
     },
   })
   @UseInterceptors(
-    FileInterceptor('proof', { storage: memoryStorage(), limits: { fileSize: 5_242_880 } }),
+    FileFieldsInterceptor(
+      [
+        { name: 'proof', maxCount: 1 },
+        { name: 'file', maxCount: 1 },
+        { name: 'receipt', maxCount: 1 },
+      ],
+      { storage: memoryStorage(), limits: { fileSize: 5_242_880 } },
+    ),
   )
   @ApiOperation({ summary: 'Confirmer envoi client + reçu' })
   clientSend(
     @CurrentUser('id') userId: number,
     @Param('id', ParseIntPipe) id: number,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles()
+    files?: {
+      proof?: Express.Multer.File[];
+      file?: Express.Multer.File[];
+      receipt?: Express.Multer.File[];
+    },
   ) {
-    const proofUrl = file ? this.upload.saveFile(file, 'proofs') : null;
+    const f = files?.proof?.[0] ?? files?.file?.[0] ?? files?.receipt?.[0];
+    const proofUrl = f ? this.upload.saveFile(f, 'proofs') : null;
     return this.tx.clientConfirmSend(id, userId, proofUrl);
   }
 

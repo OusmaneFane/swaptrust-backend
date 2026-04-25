@@ -53,9 +53,20 @@ export class ProofsService {
 
     const t = await this.prisma.transaction.findFirst({
       where: {
-        OR: [{ clientProofUrl: rel }, { operatorProofUrl: rel }],
+        OR: [
+          { clientProofUrl: rel },
+          { operatorProofUrl: rel },
+          { platformToOperatorProofUrl: rel },
+        ],
       },
-      select: { id: true, clientId: true, operatorId: true },
+      select: {
+        id: true,
+        clientId: true,
+        operatorId: true,
+        clientProofUrl: true,
+        operatorProofUrl: true,
+        platformToOperatorProofUrl: true,
+      },
     });
     if (!t) throw new NotFoundException();
 
@@ -63,7 +74,13 @@ export class ProofsService {
     const isAssignedOperator =
       user.role === UserRole.OPERATOR && t.operatorId === user.id;
     const isClient = t.clientId === user.id;
-    if (!isAdmin && !isAssignedOperator && !isClient) throw new ForbiddenException();
+
+    // Preuve interne "plateforme → opérateur" : visible uniquement pour admin et opérateur assigné
+    if (t.platformToOperatorProofUrl === rel) {
+      if (!isAdmin && !isAssignedOperator) throw new ForbiddenException();
+    } else {
+      if (!isAdmin && !isAssignedOperator && !isClient) throw new ForbiddenException();
+    }
 
     return { fullPath: this.resolveProofPath(safeName), ext: path.extname(safeName).toLowerCase() };
   }

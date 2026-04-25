@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { KycStatus, UserRole } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +18,7 @@ import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 
 const OTP_TTL_SEC = 300;
 const OTP_FALLBACK = new Map<string, { code: string; exp: number }>();
+const RESET_TTL_MIN = 30;
 
 @Injectable()
 export class AuthService {
@@ -47,6 +49,97 @@ export class AuthService {
         expiresIn: this.config.get<string>('jwt.refreshExpires') as `${number}m` | `${number}d`,
       },
     );
+  }
+
+  private appUrl(): string {
+    return this.config.get<string>('app.url') ?? 'https://donisend.com';
+  }
+
+  private resetTokenHash(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  async requestPasswordReset(emailRaw: string) {
+    const email = (emailRaw ?? '').trim().toLowerCase();
+    // Réponse uniforme: ne pas révéler si l'email existe.
+    const okResponse = { sent: true };
+
+    if (!email) return okResponse;
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true, phoneMali: true, phoneRussia: true, isBanned: true },
+    });
+    if (!user || user.isBanned) return okResponse;
+
+    const phone = clientWhatsappPhone(user);
+    if (!phone) return okResponse;
+
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = this.resetTokenHash(token);
+    const expiresAt = new Date(Date.now() + RESET_TTL_MIN * 60 * 1000);
+
+    // Invalider les tokens précédents non utilisés (hygiène)
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    await this.prisma.passwordResetToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    const resetUrl = `${this.appUrl().replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+    void this.whatsapp
+      .sendPasswordResetLink({
+        user: { name: user.name, phone },
+        resetUrl,
+        expiresInMin: RESET_TTL_MIN,
+      })
+      .catch(() => {});
+
+    return okResponse;
+  }
+
+  async validatePasswordResetToken(token: string) {
+    const raw = (token ?? '').trim();
+    if (!raw) return { valid: false };
+    const tokenHash = this.resetTokenHash(raw);
+    const row = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      include: { user: { select: { email: true } } },
+    });
+    if (!row) return { valid: false };
+    if (row.usedAt) return { valid: false };
+    if (row.expiresAt.getTime() <= Date.now()) return { valid: false };
+    return { valid: true };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const raw = (token ?? '').trim();
+    if (!raw) throw new UnauthorizedException('Invalid token');
+    const tokenHash = this.resetTokenHash(raw);
+
+    const row = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash },
+      select: { id: true, userId: true, usedAt: true, expiresAt: true },
+    });
+    if (!row || row.usedAt || row.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: row.userId },
+        data: { password: passwordHash, refreshToken: null },
+      });
+      await tx.passwordResetToken.update({
+        where: { id: row.id },
+        data: { usedAt: new Date() },
+      });
+    });
+
+    return { reset: true };
   }
 
   async register(dto: RegisterDto) {

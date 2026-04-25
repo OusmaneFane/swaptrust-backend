@@ -99,19 +99,52 @@ export class RequestsService {
       data: { requestId: request.id },
     });
 
+    // WhatsApp staff: alerte rapide pour tous les ADMIN + OPERATOR
+    const staff = await this.prisma.user.findMany({
+      where: {
+        role: { in: [UserRole.ADMIN, UserRole.OPERATOR] },
+        isBanned: false,
+      },
+      select: { name: true, phoneMali: true, phoneRussia: true, countryResidence: true },
+    });
+
+    const amountToSendLabel =
+      currencyToSend === 'XOF'
+        ? formatCFA(Number(request.amountToSend))
+        : formatRUB(Number(request.amountToSend));
+    const amountReceiveLabel =
+      currencyWanted === 'XOF'
+        ? formatCFA(Number(request.amountWanted))
+        : formatRUB(Number(request.amountWanted));
+
+    const direction =
+      dto.type === RequestType.NEED_RUB
+        ? `${amountToSendLabel} → ${amountReceiveLabel}`
+        : `${amountToSendLabel} → ${amountReceiveLabel}`;
+
+    await Promise.all(
+      staff.map((s) =>
+        this.whatsapp
+          .sendNewRequestStaffAlert({
+            staff: {
+              name: s.name,
+              phone: clientWhatsappPhone(s),
+            },
+            requestId: request.id,
+            label,
+            direction,
+            amountWanted: amountReceiveLabel,
+            expiresInMin: PENDING_TTL_MIN,
+          })
+          .catch(() => {}),
+      ),
+    );
+
     const user = await this.prisma.user.findUnique({
       where: { id: clientId },
       select: { name: true, phoneMali: true, phoneRussia: true },
     });
     if (user) {
-      const amountToSendLabel =
-        currencyToSend === 'XOF'
-          ? formatCFA(Number(request.amountToSend))
-          : formatRUB(Number(request.amountToSend));
-      const amountReceiveLabel =
-        currencyWanted === 'XOF'
-          ? formatCFA(Number(request.amountWanted))
-          : formatRUB(Number(request.amountWanted));
       void this.whatsapp
         .sendRequestCreated({
           user: { name: user.name, phone: clientWhatsappPhone(user) },
@@ -154,7 +187,9 @@ export class RequestsService {
     const r = await this.prisma.exchangeRequest.findUnique({ where: { id } });
     if (!r || r.clientId !== clientId) throw new ForbiddenException();
     if (r.status !== RequestStatus.PENDING) {
-      throw new BadRequestException('Seules les demandes en attente peuvent être annulées');
+      throw new BadRequestException(
+        'Seules les demandes en attente peuvent être annulées',
+      );
     }
     return this.prisma.exchangeRequest.update({
       where: { id },

@@ -27,7 +27,20 @@ export class WhatsappService {
     return this.config.get<string>('app.url') ?? 'https://donisend.com';
   }
 
-  async send(to: string, message: string, mediaUrl?: string): Promise<void> {
+  private apiPublicUrl(): string {
+    return (
+      this.config.get<string>('api.publicUrl') ??
+      this.config.get<string>('apiPublicUrl') ??
+      'http://localhost:3001'
+    );
+  }
+
+  async send(
+    to: string,
+    message: string,
+    mediaUrl?: string,
+    caption?: string,
+  ): Promise<void> {
     if (!this.apiKey) {
       this.logger.warn('NOTIFML_API_KEY manquant — WhatsApp ignoré');
       return;
@@ -56,6 +69,7 @@ export class WhatsappService {
         message,
         sandbox: this.sandbox,
         ...(mediaUrl && { mediaUrl }),
+        ...(caption && { caption }),
       };
 
       await firstValueFrom(
@@ -260,6 +274,7 @@ _DoniSend — Transaction #${params.transactionId}_`;
     amountSent: string;
     amountReceived: string;
     rate: string;
+    receiptUrl?: string;
   }): Promise<void> {
     const message = `🎉 *Échange réussi !*
 
@@ -278,7 +293,11 @@ Merci de faire confiance à DoniSend. À bientôt !
 
 _DoniSend — L'échange sécurisé_`;
 
-    await this.send(params.user.phone, message);
+    const caption = params.receiptUrl
+      ? `Reçu DoniSend — Transaction #${params.transactionId}`
+      : undefined;
+
+    await this.send(params.user.phone, message, params.receiptUrl, caption);
   }
 
   async sendTransactionCancelled(params: {
@@ -357,6 +376,47 @@ Bonjour ${params.user.name}, l'administrateur a rendu sa décision.
 *Décision :* ${params.resolution}
 
 Si vous avez des questions sur cette décision, répondez directement à ce message.
+
+_DoniSend_`;
+
+    await this.send(params.user.phone, message);
+  }
+
+  async sendNewRequestStaffAlert(params: {
+    staff: { name: string; phone: string };
+    requestId: number;
+    label: string;
+    direction: string;
+    amountWanted: string;
+    expiresInMin: number;
+  }): Promise<void> {
+    const message = `🟣 *Nouvelle demande à prendre en charge — #${params.requestId}*
+
+${params.label}
+💱 ${params.direction}
+🎯 Montant demandé: *${params.amountWanted}*
+⏰ Expire dans: *${params.expiresInMin} min*
+
+👉 Ouvrez le back-office pour la prise en charge.
+
+_DoniSend — Staff_`;
+
+    await this.send(params.staff.phone, message);
+  }
+
+  async sendPasswordResetLink(params: {
+    user: { name: string; phone: string };
+    resetUrl: string;
+    expiresInMin: number;
+  }): Promise<void> {
+    const message = `🔐 *Réinitialisation du mot de passe*
+
+Bonjour ${params.user.name},
+
+Voici votre lien de réinitialisation (valable *${params.expiresInMin} minutes*) :
+${params.resetUrl}
+
+Si vous n’êtes pas à l’origine de cette demande, ignorez ce message.
 
 _DoniSend_`;
 

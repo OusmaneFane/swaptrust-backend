@@ -24,6 +24,7 @@ import { HealthModule } from './health/health.module';
 import { ProofsModule } from './proofs/proofs.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { SettingsModule } from './settings/settings.module';
+import { ReceiptsModule } from './receipts/receipts.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { SettingsModule } from './settings/settings.module';
     OperatorModule,
     HealthModule,
     ProofsModule,
+    ReceiptsModule,
     WhatsappModule,
     SettingsModule,
   ],

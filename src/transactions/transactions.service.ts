@@ -19,6 +19,7 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
 import { formatCFA, formatRUB } from '../common/utils/format-money';
 import { CommissionsService } from '../commissions/commissions.service';
+import { ReceiptsService } from '../receipts/receipts.service';
 
 @Injectable()
 export class TransactionsService {
@@ -27,7 +28,17 @@ export class TransactionsService {
     private readonly notifications: NotificationsService,
     private readonly whatsapp: WhatsappService,
     private readonly commissions: CommissionsService,
+    private readonly receipts: ReceiptsService,
   ) {}
+
+  private proofViewUrl(rel?: string | null): string | null {
+    if (!rel) return null;
+    // stored as "proofs/<filename>"
+    const parts = rel.split('/');
+    const filename = parts.length === 2 && parts[0] === 'proofs' ? parts[1] : '';
+    if (!filename) return null;
+    return `/api/v1/proofs/${encodeURIComponent(filename)}`;
+  }
 
   private periodStart(period?: string) {
     if (period === '7d') return new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -54,6 +65,9 @@ export class TransactionsService {
     return rows.map(({ operatorPaymentNumber: _op, ...r }) => ({
       ...r,
       operatorPaymentNumber: null,
+      clientProofViewUrl: this.proofViewUrl(r.clientProofUrl),
+      operatorProofViewUrl: this.proofViewUrl(r.operatorProofUrl),
+      platformToOperatorProofViewUrl: this.proofViewUrl(r.platformToOperatorProofUrl),
     }));
   }
 
@@ -77,7 +91,6 @@ export class TransactionsService {
         messages: { take: 50, orderBy: { createdAt: 'desc' } },
         dispute: true,
         review: true,
-        ...(staff ? { operatorLogs: { orderBy: { createdAt: 'asc' } } } : {}),
       },
     });
     if (!t) throw new NotFoundException();
@@ -87,9 +100,20 @@ export class TransactionsService {
     }
     if (!staff && t.clientId === userId) {
       const { operatorPaymentNumber: _hidden, ...rest } = t;
-      return { ...rest, operatorPaymentNumber: null };
+      return {
+        ...rest,
+        operatorPaymentNumber: null,
+        clientProofViewUrl: this.proofViewUrl(rest.clientProofUrl),
+        operatorProofViewUrl: this.proofViewUrl(rest.operatorProofUrl),
+        platformToOperatorProofViewUrl: this.proofViewUrl(rest.platformToOperatorProofUrl),
+      };
     }
-    return t;
+    return {
+      ...t,
+      clientProofViewUrl: this.proofViewUrl(t.clientProofUrl),
+      operatorProofViewUrl: this.proofViewUrl(t.operatorProofUrl),
+      platformToOperatorProofViewUrl: this.proofViewUrl(t.platformToOperatorProofUrl),
+    };
   }
 
   async clientConfirmSend(
@@ -199,6 +223,7 @@ export class TransactionsService {
       include: {
         request: { select: { type: true } },
         client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        operator: { select: { name: true } },
       },
     });
     // "1 000 CFA" est volontaire : ça évite d'afficher un taux trop petit (ex. 0.14 RUB) en WhatsApp.
@@ -215,6 +240,30 @@ export class TransactionsService {
       amountSent = formatRUB(Number(gross));
       amountReceived = formatCFA(Number(done.amountCfa));
     }
+
+    // Générer un reçu PDF + URL publique (NotifML doit pouvoir récupérer le média sans auth)
+    let receiptUrl: string | undefined;
+    try {
+      const directionLabel =
+        done.request.type === RequestType.NEED_RUB ? 'CFA → RUB' : 'RUB → CFA';
+      const { publicUrl } = await this.receipts.generateTransferReceiptPdf({
+        transactionId,
+        createdAt: done.createdAt,
+        completedAt: done.completedAt,
+        clientName: done.client.name,
+        operatorName: done.operator?.name ?? null,
+        directionLabel,
+        amountSentLabel: amountSent,
+        amountReceivedLabel: amountReceived,
+        commissionLabel: `${commissionPct}%`,
+        rateLabel: rateStr,
+      });
+      receiptUrl = publicUrl;
+    } catch {
+      // fail-soft: l'échange est déjà clôturé, on ne bloque pas la réponse
+      receiptUrl = undefined;
+    }
+
     void this.whatsapp
       .sendTransactionCompleted({
         user: {
@@ -225,6 +274,7 @@ export class TransactionsService {
         amountSent,
         amountReceived,
         rate: rateStr,
+        receiptUrl,
       })
       .catch(() => {});
 

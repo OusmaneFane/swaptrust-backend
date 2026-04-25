@@ -46,7 +46,13 @@ export class NotificationsService {
       data?: Prisma.InputJsonValue;
     },
   ) {
-    return this.createInApp(userId, payload.type, payload.title, payload.body, payload.data);
+    return this.createInApp(
+      userId,
+      payload.type,
+      payload.title,
+      payload.body,
+      payload.data,
+    );
   }
 
   async notifyOperators(payload: {
@@ -60,7 +66,15 @@ export class NotificationsService {
       select: { id: true },
     });
     await Promise.all(
-      staff.map((u) => this.createInApp(u.id, payload.type, payload.title, payload.body, payload.data)),
+      staff.map((u) =>
+        this.createInApp(
+          u.id,
+          payload.type,
+          payload.title,
+          payload.body,
+          payload.data,
+        ),
+      ),
     );
   }
 
@@ -76,7 +90,13 @@ export class NotificationsService {
     });
     await Promise.all(
       admins.map((a) =>
-        this.createInApp(a.id, payload.type, payload.title, payload.body, payload.data),
+        this.createInApp(
+          a.id,
+          payload.type,
+          payload.title,
+          payload.body,
+          payload.data,
+        ),
       ),
     );
   }
@@ -96,7 +116,9 @@ export class NotificationsService {
   }
 
   async markRead(userId: number, id: number) {
-    const n = await this.prisma.notification.findFirst({ where: { id, userId } });
+    const n = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
     if (!n) throw new NotFoundException();
     return this.prisma.notification.update({
       where: { id },
@@ -113,14 +135,18 @@ export class NotificationsService {
   }
 
   async remove(userId: number, id: number) {
-    const n = await this.prisma.notification.findFirst({ where: { id, userId } });
+    const n = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
     if (!n) throw new NotFoundException();
     await this.prisma.notification.delete({ where: { id } });
     return { deleted: true };
   }
 
   async getPreferences(userId: number) {
-    let p = await this.prisma.notificationPreference.findUnique({ where: { userId } });
+    let p = await this.prisma.notificationPreference.findUnique({
+      where: { userId },
+    });
     if (!p) {
       p = await this.prisma.notificationPreference.create({
         data: { userId },

@@ -8,9 +8,9 @@ import {
   Query,
   UseGuards,
   UseInterceptors,
-  UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import {
   ApiBearerAuth,
@@ -84,11 +84,22 @@ export class OperatorController {
   @ApiBody({
     schema: {
       type: 'object',
-      properties: { proof: { type: 'string', format: 'binary' } },
+      properties: {
+        proof: { type: 'string', format: 'binary' },
+        file: { type: 'string', format: 'binary' },
+        receipt: { type: 'string', format: 'binary' },
+      },
     },
   })
   @UseInterceptors(
-    FileInterceptor('proof', { storage: memoryStorage(), limits: { fileSize: 5_242_880 } }),
+    FileFieldsInterceptor(
+      [
+        { name: 'proof', maxCount: 1 },
+        { name: 'file', maxCount: 1 },
+        { name: 'receipt', maxCount: 1 },
+      ],
+      { storage: memoryStorage(), limits: { fileSize: 5_242_880 } },
+    ),
   )
   @ApiOperation({
     summary:
@@ -97,16 +108,142 @@ export class OperatorController {
   confirmPlatformTransfer(
     @Param('id', ParseIntPipe) id: number,
     @CurrentUser() user: Express.User,
-    @UploadedFile() file?: Express.Multer.File,
+    @UploadedFiles()
+    files?: {
+      proof?: Express.Multer.File[];
+      file?: Express.Multer.File[];
+      receipt?: Express.Multer.File[];
+    },
   ) {
-    const proofUrl = file ? this.upload.saveFile(file, 'proofs') : null;
+    const f = files?.proof?.[0] ?? files?.file?.[0] ?? files?.receipt?.[0];
+    const proofUrl = f ? this.upload.saveFile(f, 'proofs') : null;
     return this.operatorService.confirmPlatformTransfer(id, user.id, user.role, proofUrl);
   }
 
   @Post('transactions/:id/send')
-  @ApiOperation({ summary: 'Confirmer envoi opérateur (sans preuve)' })
-  operatorSend(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: Express.User) {
-    return this.operatorService.confirmOperatorSend(id, user.id, user.role, null);
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        proof: { type: 'string', format: 'binary' },
+        file: { type: 'string', format: 'binary' },
+        receipt: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'proof', maxCount: 1 },
+        { name: 'file', maxCount: 1 },
+        { name: 'receipt', maxCount: 1 },
+      ],
+      { storage: memoryStorage(), limits: { fileSize: 5_242_880 } },
+    ),
+  )
+  @ApiOperation({ summary: 'Confirmer envoi opérateur (+ preuve optionnelle, image ou PDF)' })
+  operatorSend(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: Express.User,
+    @UploadedFiles()
+    files?: {
+      proof?: Express.Multer.File[];
+      file?: Express.Multer.File[];
+      receipt?: Express.Multer.File[];
+    },
+  ) {
+    const f = files?.proof?.[0] ?? files?.file?.[0] ?? files?.receipt?.[0];
+    const proofUrl = f ? this.upload.saveFile(f, 'proofs') : null;
+    return this.operatorService.confirmOperatorSend(id, user.id, user.role, proofUrl);
+  }
+
+  @Post('transactions/:id/operator-proof')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        proof: { type: 'string', format: 'binary' },
+        file: { type: 'string', format: 'binary' },
+        receipt: { type: 'string', format: 'binary' },
+      },
+      required: ['proof'],
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'proof', maxCount: 1 },
+        { name: 'file', maxCount: 1 },
+        { name: 'receipt', maxCount: 1 },
+      ],
+      { storage: memoryStorage(), limits: { fileSize: 5_242_880 } },
+    ),
+  )
+  @ApiOperation({
+    summary: 'Uploader/mettre à jour la preuve d’envoi opérateur (image/PDF) — même après OPERATOR_SENT',
+  })
+  uploadOperatorProof(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: Express.User,
+    @UploadedFiles()
+    files?: {
+      proof?: Express.Multer.File[];
+      file?: Express.Multer.File[];
+      receipt?: Express.Multer.File[];
+    },
+  ) {
+    const f = files?.proof?.[0] ?? files?.file?.[0] ?? files?.receipt?.[0];
+    if (!f) {
+      // garder une erreur claire (sinon on écrase par null)
+      throw new Error('proof file required');
+    }
+    const proofUrl = this.upload.saveFile(f, 'proofs');
+    return this.operatorService.uploadOperatorProof(id, user.id, user.role, proofUrl);
+  }
+
+  @Post('transactions/:id/platform-transfer-proof')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        proof: { type: 'string', format: 'binary' },
+        file: { type: 'string', format: 'binary' },
+        receipt: { type: 'string', format: 'binary' },
+      },
+      required: ['proof'],
+    },
+  })
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [
+        { name: 'proof', maxCount: 1 },
+        { name: 'file', maxCount: 1 },
+        { name: 'receipt', maxCount: 1 },
+      ],
+      { storage: memoryStorage(), limits: { fileSize: 5_242_880 } },
+    ),
+  )
+  @ApiOperation({
+    summary:
+      'Uploader/mettre à jour la preuve interne DoniSend → opérateur (image/PDF). Visible admin/opérateur uniquement',
+  })
+  uploadPlatformTransferProof(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: Express.User,
+    @UploadedFiles()
+    files?: {
+      proof?: Express.Multer.File[];
+      file?: Express.Multer.File[];
+      receipt?: Express.Multer.File[];
+    },
+  ) {
+    const f = files?.proof?.[0] ?? files?.file?.[0] ?? files?.receipt?.[0];
+    if (!f) throw new Error('proof file required');
+    const proofUrl = this.upload.saveFile(f, 'proofs');
+    return this.operatorService.uploadPlatformTransferProof(id, user.id, user.role, proofUrl);
   }
 
   @Post('transactions/:id/note')
