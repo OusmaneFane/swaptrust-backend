@@ -9,6 +9,10 @@ export default () => ({
      */
     publicUrl: process.env.API_PUBLIC_URL ?? process.env.PUBLIC_API_URL ?? 'http://localhost:3001',
   },
+  receipts: {
+    /** Secret HMAC pour signer les QR codes de vérification. */
+    verifySecret: process.env.RECEIPT_VERIFY_SECRET ?? process.env.RECEIPTS_VERIFY_SECRET ?? '',
+  },
   /** Liens dans les messages (WhatsApp, emails) */
   app: {
     url: process.env.APP_URL ?? process.env.FRONTEND_URL ?? 'https://swaptrust.com',

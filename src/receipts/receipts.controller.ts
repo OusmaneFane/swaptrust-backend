@@ -5,6 +5,7 @@ import {
   Header,
   NotFoundException,
   Param,
+  Query,
   StreamableFile,
 } from '@nestjs/common';
 import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
@@ -12,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '../common/decorators/public.decorator';
+import { ReceiptsService } from './receipts.service';
 
 const RECEIPT_FILENAME =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/i;
@@ -19,7 +21,10 @@ const RECEIPT_FILENAME =
 @ApiTags('Receipts')
 @Controller('public/receipts')
 export class ReceiptsController {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly receipts: ReceiptsService,
+  ) {}
 
   private assertSafeFilename(filename: string) {
     const base = path.basename(filename);
@@ -37,6 +42,16 @@ export class ReceiptsController {
       throw new BadRequestException('Invalid path');
     }
     return full;
+  }
+
+  @Public()
+  @Get('verify')
+  @ApiOperation({
+    summary:
+      "Vérifier l'authenticité d'un reçu via token signé (utilisé par la page frontend de vérification)",
+  })
+  async verify(@Query('token') token: string) {
+    return this.receipts.verifyReceiptAuthenticity(token);
   }
 
   @Public()

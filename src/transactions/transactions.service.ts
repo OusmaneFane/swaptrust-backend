@@ -241,6 +241,12 @@ export class TransactionsService {
       amountReceived = formatCFA(Number(done.amountCfa));
     }
 
+    // Commission affichée en montant (devise d'envoi)
+    const commissionAmountLabel =
+      done.request.type === RequestType.NEED_RUB
+        ? formatCFA(Number(done.commissionAmount))
+        : formatRUB(Number(done.commissionAmount));
+
     // Générer un reçu PDF + URL publique (NotifML doit pouvoir récupérer le média sans auth)
     let receiptUrl: string | undefined;
     try {
@@ -251,12 +257,10 @@ export class TransactionsService {
         createdAt: done.createdAt,
         completedAt: done.completedAt,
         clientName: done.client.name,
-        operatorName: done.operator?.name ?? null,
         directionLabel,
         amountSentLabel: amountSent,
         amountReceivedLabel: amountReceived,
-        commissionLabel: `${commissionPct}%`,
-        rateLabel: rateStr,
+        commissionLabel: `${commissionPct}% (${commissionAmountLabel})`,
       });
       receiptUrl = publicUrl;
     } catch {
