@@ -226,9 +226,7 @@ export class TransactionsService {
         operator: { select: { name: true } },
       },
     });
-    // "1 000 CFA" est volontaire : ça évite d'afficher un taux trop petit (ex. 0.14 RUB) en WhatsApp.
     const commissionPct = await this.commissions.getCommissionEffectivePercent();
-    const rateStr = `Taux Google: 1 000 CFA = ${(Number(done.rate) * 1000).toFixed(2)} ₽ • Commission: ${commissionPct}%`;
     let amountSent: string;
     let amountReceived: string;
     if (done.request.type === RequestType.NEED_RUB) {
@@ -246,6 +244,8 @@ export class TransactionsService {
       done.request.type === RequestType.NEED_RUB
         ? formatCFA(Number(done.commissionAmount))
         : formatRUB(Number(done.commissionAmount));
+
+    const commissionStr = `${commissionPct}% -> ${commissionAmountLabel}`;
 
     // Générer un reçu PDF + URL publique (NotifML doit pouvoir récupérer le média sans auth)
     let receiptUrl: string | undefined;
@@ -277,7 +277,7 @@ export class TransactionsService {
         transactionId,
         amountSent,
         amountReceived,
-        rate: rateStr,
+        rate: commissionStr,
         receiptUrl,
       })
       .catch(() => {});

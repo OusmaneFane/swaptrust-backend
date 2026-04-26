@@ -283,7 +283,7 @@ Félicitations ${params.user.name}, votre transaction est clôturée avec succè
 📊 *Récapitulatif :*
 • Envoyé : *${params.amountSent}*
 • Reçu : *${params.amountReceived}*
-• Taux & commission : ${params.rate}
+• Commission : ${params.rate}
 
 ⭐ *Donnez votre avis* sur cet échange dans l'application — cela aide toute la communauté.
 
@@ -293,11 +293,15 @@ Merci de faire confiance à DoniSend. À bientôt !
 
 _DoniSend — L'échange sécurisé_`;
 
-    const caption = params.receiptUrl
-      ? `Reçu DoniSend — Transaction #${params.transactionId}`
-      : undefined;
+    // 1) Toujours envoyer le message texte (même si le PDF échoue)
+    await this.send(params.user.phone, message);
 
-    await this.send(params.user.phone, message, params.receiptUrl, caption);
+    // 2) Envoyer le PDF séparément (fail-soft)
+    if (params.receiptUrl) {
+      const caption = `Reçu DoniSend — Transaction #${params.transactionId}`;
+      const mediaMsg = `📄 Reçu PDF — Transaction #${params.transactionId}`;
+      await this.send(params.user.phone, mediaMsg, params.receiptUrl, caption);
+    }
   }
 
   async sendTransactionCancelled(params: {

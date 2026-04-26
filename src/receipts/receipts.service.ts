@@ -66,9 +66,12 @@ export class ReceiptsService {
     const hasRub = s.includes('RUB');
     if (hasCfa && hasRub) {
       // Evite "→" si certaines polices le rendent mal
-      const cfaIdx = s.indexOf('CFA') >= 0 ? s.indexOf('CFA') : s.indexOf('XOF');
+      const cfaIdx =
+        s.indexOf('CFA') >= 0 ? s.indexOf('CFA') : s.indexOf('XOF');
       const rubIdx = s.indexOf('RUB');
-      return cfaIdx >= 0 && rubIdx >= 0 && cfaIdx < rubIdx ? 'CFA -> RUB' : 'RUB -> CFA';
+      return cfaIdx >= 0 && rubIdx >= 0 && cfaIdx < rubIdx
+        ? 'CFA -> RUB'
+        : 'RUB -> CFA';
     }
     return label;
   }
@@ -82,7 +85,8 @@ export class ReceiptsService {
   }
 
   private base64UrlDecode(input: string): string {
-    const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
+    const pad =
+      input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
     const s = (input + pad).replace(/-/g, '+').replace(/_/g, '/');
     return Buffer.from(s, 'base64').toString('utf8');
   }
@@ -105,7 +109,9 @@ export class ReceiptsService {
     if (!body || !sig) return { valid: false };
     const secret = this.receiptVerifySecret();
     if (!secret) return { valid: false };
-    const expected = createHmac('sha256', secret).update(body).digest('base64url');
+    const expected = createHmac('sha256', secret)
+      .update(body)
+      .digest('base64url');
     if (expected !== sig) return { valid: false };
     try {
       const payload = JSON.parse(this.base64UrlDecode(body));
@@ -129,16 +135,23 @@ export class ReceiptsService {
 
     const transactionId = Number(v.payload.transactionId);
     const receiptFilename = String(v.payload.receiptFilename ?? '');
-    if (!Number.isFinite(transactionId) || transactionId <= 0) return { valid: false };
+    if (!Number.isFinite(transactionId) || transactionId <= 0)
+      return { valid: false };
     if (!/^[0-9a-f-]{36}\.pdf$/i.test(receiptFilename)) return { valid: false };
 
     const tx = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       select: { id: true, status: true, completedAt: true },
     });
-    if (!tx || tx.status !== 'COMPLETED' || !tx.completedAt) return { valid: false };
+    if (!tx || tx.status !== 'COMPLETED' || !tx.completedAt)
+      return { valid: false };
 
-    return { valid: true, transactionId, receiptFilename, completedAt: tx.completedAt };
+    return {
+      valid: true,
+      transactionId,
+      receiptFilename,
+      completedAt: tx.completedAt,
+    };
   }
 
   private appUrl(): string {
@@ -228,8 +241,13 @@ export class ReceiptsService {
         const pagePad = 48;
         const headerH = 92;
         doc.save();
-        doc.roundedRect(pagePad, 32, doc.page.width - pagePad * 2, headerH, 16).fill('#ffffff');
-        doc.roundedRect(pagePad, 32, doc.page.width - pagePad * 2, headerH, 16).lineWidth(1).stroke(border);
+        doc
+          .roundedRect(pagePad, 32, doc.page.width - pagePad * 2, headerH, 16)
+          .fill('#ffffff');
+        doc
+          .roundedRect(pagePad, 32, doc.page.width - pagePad * 2, headerH, 16)
+          .lineWidth(1)
+          .stroke(border);
         // left accent strip
         doc.roundedRect(pagePad, 32, 10, headerH, 16).fill(navy);
         doc.restore();
@@ -238,12 +256,22 @@ export class ReceiptsService {
         const svg = this.logoSvg();
         if (svg) {
           // viewBox 520x140 → scale down
-          SVGtoPDF(doc as unknown as PDFKit.PDFDocument, svg, pagePad + 20, 46, {
-            width: 170,
-            preserveAspectRatio: 'xMinYMin meet',
-          });
+          SVGtoPDF(
+            doc as unknown as PDFKit.PDFDocument,
+            svg,
+            pagePad + 20,
+            46,
+            {
+              width: 170,
+              preserveAspectRatio: 'xMinYMin meet',
+            },
+          );
         } else {
-          doc.fillColor(ink).font('Helvetica-Bold').fontSize(18).text('DoniSend', pagePad + 24, 60);
+          doc
+            .fillColor(ink)
+            .font('Helvetica-Bold')
+            .fontSize(18)
+            .text('DoniSend', pagePad + 24, 60);
         }
 
         doc
@@ -266,16 +294,23 @@ export class ReceiptsService {
             ellipsis: true,
           });
 
-        const completedLabel = input.completedAt ? input.completedAt : input.createdAt;
+        const completedLabel = input.completedAt
+          ? input.completedAt
+          : input.createdAt;
         doc
           .fillColor(slate)
           .font('Helvetica')
           .fontSize(10)
-          .text(`Date: ${this.formatDateFr(completedLabel)}`, pagePad + 220, 88, {
-            width: doc.page.width - pagePad - (pagePad + 220),
-            lineBreak: false,
-            ellipsis: true,
-          });
+          .text(
+            `Date: ${this.formatDateFr(completedLabel)}`,
+            pagePad + 220,
+            88,
+            {
+              width: doc.page.width - pagePad - (pagePad + 220),
+              lineBreak: false,
+              ellipsis: true,
+            },
+          );
 
         // Main summary card
         const cardX = pagePad;
@@ -284,7 +319,10 @@ export class ReceiptsService {
         const cardH = 330;
         doc.save();
         doc.roundedRect(cardX, cardY, cardW, cardH, 18).fill('#ffffff');
-        doc.roundedRect(cardX, cardY, cardW, cardH, 18).lineWidth(1).stroke(border);
+        doc
+          .roundedRect(cardX, cardY, cardW, cardH, 18)
+          .lineWidth(1)
+          .stroke(border);
         doc.restore();
 
         const left = cardX + 24;
@@ -298,7 +336,11 @@ export class ReceiptsService {
           doc.save();
           doc.roundedRect(x, y0, w, 18, 9).fill(color);
           doc.restore();
-          doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9).text(text, x + 9, y0 + 5);
+          doc
+            .fillColor('#ffffff')
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .text(text, x + 9, y0 + 5);
           return w + 8;
         };
         let bx = left;
@@ -308,8 +350,14 @@ export class ReceiptsService {
 
         // Amounts (big)
         const sent = this.normalizePdfCurrencyGlyphs(input.amountSentLabel);
-        const received = this.normalizePdfCurrencyGlyphs(input.amountReceivedLabel);
-        doc.fillColor(slate).font('Helvetica').fontSize(10).text('Envoyé', left, y);
+        const received = this.normalizePdfCurrencyGlyphs(
+          input.amountReceivedLabel,
+        );
+        doc
+          .fillColor(slate)
+          .font('Helvetica')
+          .fontSize(10)
+          .text('Envoyé', left, y);
         doc
           .fillColor(ink)
           .font('Helvetica-Bold')
@@ -320,7 +368,11 @@ export class ReceiptsService {
             ellipsis: true,
           });
         y += 52;
-        doc.fillColor(slate).font('Helvetica').fontSize(10).text('Reçu', left, y);
+        doc
+          .fillColor(slate)
+          .font('Helvetica')
+          .fontSize(10)
+          .text('Reçu', left, y);
         doc
           .fillColor(accent)
           .font('Helvetica-Bold')
@@ -344,14 +396,21 @@ export class ReceiptsService {
         const detailsW = cardW - 48;
         const detailsH = 98;
         doc.save();
-        doc.roundedRect(detailsX, detailsY, detailsW, detailsH, 14).fill('#f8fafc');
-        doc.roundedRect(detailsX, detailsY, detailsW, detailsH, 14).lineWidth(1).stroke('#eef2f7');
+        doc
+          .roundedRect(detailsX, detailsY, detailsW, detailsH, 14)
+          .fill('#f8fafc');
+        doc
+          .roundedRect(detailsX, detailsY, detailsW, detailsH, 14)
+          .lineWidth(1)
+          .stroke('#eef2f7');
         doc.restore();
 
         const colGap = 18;
         const colW = (detailsW - colGap) / 2;
-        const labelStyle = () => doc.fillColor(slate).font('Helvetica').fontSize(9);
-        const valueStyle = () => doc.fillColor(ink).font('Helvetica-Bold').fontSize(11);
+        const labelStyle = () =>
+          doc.fillColor(slate).font('Helvetica').fontSize(9);
+        const valueStyle = () =>
+          doc.fillColor(ink).font('Helvetica-Bold').fontSize(11);
 
         const cell = (x: number, y0: number, label: string, value: string) => {
           labelStyle().text(label, x, y0);
@@ -363,12 +422,24 @@ export class ReceiptsService {
         };
 
         const dir = this.normalizeDirection(input.directionLabel);
-        const commission = this.normalizePdfCurrencyGlyphs(input.commissionLabel);
+        const commission = this.normalizePdfCurrencyGlyphs(
+          input.commissionLabel,
+        );
 
         cell(detailsX + 14, detailsY + 14, 'Client', input.clientName);
-        cell(detailsX + 14 + colW + colGap, detailsY + 14, 'Opérateur', 'DoniSend');
+        cell(
+          detailsX + 14 + colW + colGap,
+          detailsY + 14,
+          'Opérateur',
+          'DoniSend',
+        );
         cell(detailsX + 14, detailsY + 56, 'Sens', dir);
-        cell(detailsX + 14 + colW + colGap, detailsY + 56, 'Commission', commission);
+        cell(
+          detailsX + 14 + colW + colGap,
+          detailsY + 56,
+          'Commission',
+          commission,
+        );
 
         y += detailsH + 14;
 
@@ -376,7 +447,8 @@ export class ReceiptsService {
         // IMPORTANT: PDFKit respecte la marge en bas (page.height - margin).
         // Si on écrit trop près du bas, il crée une 2e page.
         const bottomMargin =
-          (doc.page as unknown as { margins?: { bottom?: number } }).margins?.bottom ?? pagePad;
+          (doc.page as unknown as { margins?: { bottom?: number } }).margins
+            ?.bottom ?? pagePad;
         // marge de sécurité pour éviter un saut de page PDFKit
         const footerY2 = doc.page.height - bottomMargin - 26;
         const footerY1 = footerY2 - 14;
@@ -434,11 +506,12 @@ export class ReceiptsService {
    * Helpers: formats (optionnellement utilisé par les callers).
    */
   formatLabels(params: { sent: bigint; received: bigint; isNeedRub: boolean }) {
-    const sent = params.isNeedRub ? formatCFA(Number(params.sent)) : formatRUB(Number(params.sent));
+    const sent = params.isNeedRub
+      ? formatCFA(Number(params.sent))
+      : formatRUB(Number(params.sent));
     const received = params.isNeedRub
       ? formatRUB(Number(params.received))
       : formatCFA(Number(params.received));
     return { sent, received };
   }
 }
-
