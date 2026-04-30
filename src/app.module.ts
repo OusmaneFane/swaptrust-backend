@@ -25,6 +25,7 @@ import { ProofsModule } from './proofs/proofs.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { SettingsModule } from './settings/settings.module';
 import { ReceiptsModule } from './receipts/receipts.module';
+import { LegalModule } from './legal/legal.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { ReceiptsModule } from './receipts/receipts.module';
     ReceiptsModule,
     WhatsappModule,
     SettingsModule,
+    LegalModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

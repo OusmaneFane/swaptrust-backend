@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Prisma, RequestStatus, RequestType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RatesService } from '../rates/rates.service';
@@ -26,15 +25,12 @@ export class RequestsService {
     private readonly rates: RatesService,
     private readonly notifications: NotificationsService,
     private readonly commissions: CommissionsService,
-    private readonly config: ConfigService,
     private readonly whatsapp: WhatsappService,
   ) {}
 
   async create(dto: CreateRequestDto, clientId: number) {
     const { rate: googleRate } = await this.rates.getCurrentRateXofToRub();
     const amountWanted = BigInt(dto.amountWanted);
-    const minXof = this.config.get<number>('limits.minAmountXof') ?? 500_000;
-    const maxXof = this.config.get<number>('limits.maxAmountXof') ?? 50_000_000;
 
     let amountToSendBase: bigint;
     let currencyWanted: string;
@@ -44,21 +40,9 @@ export class RequestsService {
       currencyWanted = 'RUB';
       currencyToSend = 'XOF';
       amountToSendBase = BigInt(Math.round(Number(amountWanted) / googleRate));
-      const netXof = Number(amountToSendBase);
-      if (netXof < minXof || netXof > maxXof) {
-        throw new BadRequestException(
-          `Montant CFA hors limites (${minXof}–${maxXof} centimes, hors commission)`,
-        );
-      }
     } else {
       currencyWanted = 'XOF';
       currencyToSend = 'RUB';
-      const wantedXof = Number(amountWanted);
-      if (wantedXof < minXof || wantedXof > maxXof) {
-        throw new BadRequestException(
-          `Montant CFA hors limites (${minXof}–${maxXof} centimes)`,
-        );
-      }
       amountToSendBase = BigInt(Math.round(Number(amountWanted) * googleRate));
     }
 
@@ -105,7 +89,12 @@ export class RequestsService {
         role: { in: [UserRole.ADMIN, UserRole.OPERATOR] },
         isBanned: false,
       },
-      select: { name: true, phoneMali: true, phoneRussia: true, countryResidence: true },
+      select: {
+        name: true,
+        phoneMali: true,
+        phoneRussia: true,
+        countryResidence: true,
+      },
     });
 
     const amountToSendLabel =

@@ -28,11 +28,11 @@ export class WhatsappService {
   }
 
   private apiPublicUrl(): string {
-    return (
+    const raw =
       this.config.get<string>('api.publicUrl') ??
       this.config.get<string>('apiPublicUrl') ??
-      'http://localhost:3001'
-    );
+      'http://localhost:3001';
+    return raw.replace(/\/$/, '');
   }
 
   async send(
@@ -197,11 +197,10 @@ _DoniSend_`;
     platformAccountNumber: string;
     platformAccountName: string;
     exactAmount: string;
-    operatorName: string;
   }): Promise<void> {
     const message = `🟢 *Opérateur assigné ! Action requise*
 
-Bonjour ${params.user.name}, un opérateur (${params.operatorName}) a pris en charge votre échange.
+Bonjour ${params.user.name}, votre échange est maintenant pris en charge par un opérateur.
 
 ─────────────────────
 📲 *Envoyez MAINTENANT :*
@@ -337,7 +336,7 @@ _DoniSend_`;
 Bonjour ${params.user.name}, votre demande d'échange a expiré car aucun opérateur n'était disponible dans le délai imparti.
 
 *Que faire ?*
-Publiez une nouvelle demande — nos opérateurs sont disponibles de *8h à 22h (heure de Moscou)*.
+Publiez une nouvelle demande — nos opérateurs sont disponibles de *8h à 00h (heure de UFA)*.
 
 👉 Nouvelle demande : ${this.appUrl()}/demandes/nouvelle
 

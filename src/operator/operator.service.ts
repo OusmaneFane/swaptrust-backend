@@ -166,7 +166,6 @@ export class OperatorService {
         platformAccountNumber: platformAccount.accountNumber,
         platformAccountName: platformAccount.accountName,
         exactAmount: exactStr,
-        operatorName: operator.name ?? 'Opérateur',
       })
       .catch(() => {});
 

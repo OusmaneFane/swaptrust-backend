@@ -59,7 +59,8 @@ export class TransactionsService {
       include: {
         request: true,
         platformAccount: true,
-        operator: { select: { id: true, name: true, avatar: true } },
+        // Privacy: do not expose operator identity to clients
+        operator: { select: { id: true, avatar: true } },
       },
     });
     return rows.map(({ operatorPaymentNumber: _op, ...r }) => ({
@@ -102,6 +103,10 @@ export class TransactionsService {
       const { operatorPaymentNumber: _hidden, ...rest } = t;
       return {
         ...rest,
+        // Privacy: do not expose operator identity to clients
+        operator: rest.operator
+          ? { id: rest.operator.id, avatar: rest.operator.avatar }
+          : null,
         operatorPaymentNumber: null,
         clientProofViewUrl: this.proofViewUrl(rest.clientProofUrl),
         operatorProofViewUrl: this.proofViewUrl(rest.operatorProofUrl),

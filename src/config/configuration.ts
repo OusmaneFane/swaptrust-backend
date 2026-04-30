@@ -7,7 +7,22 @@ export default () => ({
      * URL publique du backend (utilisée pour construire des liens média WhatsApp).
      * Exemple: https://api.swaptrust.com
      */
-    publicUrl: process.env.API_PUBLIC_URL ?? process.env.PUBLIC_API_URL ?? 'http://localhost:3001',
+    publicUrl:
+      process.env.API_PUBLIC_URL ??
+      process.env.PUBLIC_API_URL ??
+      // Render: https://your-service.onrender.com
+      process.env.RENDER_EXTERNAL_URL ??
+      // Railway: set a custom var, or infer from public domain
+      (process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : undefined) ??
+      // Fly.io: infer from app name (best-effort)
+      (process.env.FLY_APP_NAME ? `https://${process.env.FLY_APP_NAME}.fly.dev` : undefined) ??
+      // Heroku: infer from app name (best-effort)
+      (process.env.HEROKU_APP_NAME
+        ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+        : undefined) ??
+      'http://localhost:3001',
   },
   receipts: {
     /** Secret HMAC pour signer les QR codes de vérification. */

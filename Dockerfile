@@ -26,6 +26,7 @@ ENV NODE_OPTIONS=--experimental-require-module
 RUN pnpm install --frozen-lockfile
 
 COPY src ./src/
+COPY docs ./docs/
 
 RUN pnpm exec prisma generate \
   && pnpm run build \
@@ -43,6 +44,7 @@ ENV NODE_OPTIONS=--experimental-require-module
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/docs ./docs
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 

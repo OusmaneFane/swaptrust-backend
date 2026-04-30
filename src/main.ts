@@ -43,6 +43,69 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
+  const expressApp = app.getHttpAdapter().getInstance();
+
+  // Protect Swagger UI with HTTP Basic Auth (required in production)
+  const swaggerUser = process.env.SWAGGER_USER ?? '';
+  const swaggerPass = process.env.SWAGGER_PASSWORD ?? '';
+  const isProd = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+
+  const swaggerPaths = ['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'];
+  const swaggerJsonPaths = [
+    '/api/v1/docs-json',
+    '/api/v1/docs-json/',
+    '/api/docs-json',
+    '/api/docs-json/',
+  ];
+
+  const shouldEnableSwagger = !isProd || (!!swaggerUser && !!swaggerPass);
+  if (shouldEnableSwagger) {
+    // If credentials are set, enforce them (prod + optionally non-prod)
+    if (swaggerUser && swaggerPass) {
+      expressApp.use(
+        [...swaggerPaths, ...swaggerJsonPaths],
+        (req: Request, res: Response, next: () => void) => {
+          const header = req.headers.authorization ?? '';
+          const [scheme, encoded] = header.split(' ');
+          let user = '';
+          let pass = '';
+          if (scheme === 'Basic' && encoded) {
+            const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+            const idx = decoded.indexOf(':');
+            user = idx >= 0 ? decoded.slice(0, idx) : decoded;
+            pass = idx >= 0 ? decoded.slice(idx + 1) : '';
+          } else {
+            // Optional URL-based access (useful for tools / quick access):
+            // /api/v1/docs?u=...&p=...
+            const q =
+              (req as unknown as { query?: Record<string, unknown> }).query ?? {};
+            user = typeof q.u === 'string' ? q.u : '';
+            pass = typeof q.p === 'string' ? q.p : '';
+          }
+          if (user !== swaggerUser || pass !== swaggerPass) {
+            res.setHeader('WWW-Authenticate', 'Basic realm="DoniSend API Docs"');
+            return res.status(401).send('Invalid credentials');
+          }
+          return next();
+        },
+      );
+    } else if (isProd) {
+      // In production, we never allow public Swagger access.
+      expressApp.use([...swaggerPaths, ...swaggerJsonPaths], (_req: Request, res: Response) =>
+        res
+          .status(403)
+          .send('Swagger disabled (missing SWAGGER_USER/SWAGGER_PASSWORD)'),
+      );
+      logger.warn(
+        'Swagger disabled in production: missing SWAGGER_USER/SWAGGER_PASSWORD',
+      );
+    } else {
+      logger.warn(
+        'Swagger docs not protected: set SWAGGER_USER and SWAGGER_PASSWORD to enable Basic Auth',
+      );
+    }
+  }
+
   const config = new DocumentBuilder()
     .setTitle('DoniSend API')
     .setDescription("API d'échange sécurisé CFA ↔ Rouble")
@@ -67,61 +130,13 @@ async function bootstrap() {
     .addTag('Proofs')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
-  // Même préfixe que les routes REST : /api/v1/docs (évite de chercher /api/docs alors que l’API est sous /api/v1)
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-    useGlobalPrefix: true,
-  });
-
-  const expressApp = app.getHttpAdapter().getInstance();
-
-  // Protect Swagger UI with HTTP Basic Auth (optional if env not set)
-  const swaggerUser = process.env.SWAGGER_USER ?? '';
-  const swaggerPass = process.env.SWAGGER_PASSWORD ?? '';
-  const isProd = (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
-  if (swaggerUser && swaggerPass) {
-    expressApp.use(
-      ['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'],
-      (req: Request, res: Response, next: () => void) => {
-      const header = req.headers.authorization ?? '';
-      const [scheme, encoded] = header.split(' ');
-      let user = '';
-      let pass = '';
-      if (scheme === 'Basic' && encoded) {
-        const decoded = Buffer.from(encoded, 'base64').toString('utf8');
-        const idx = decoded.indexOf(':');
-        user = idx >= 0 ? decoded.slice(0, idx) : decoded;
-        pass = idx >= 0 ? decoded.slice(idx + 1) : '';
-      } else {
-        // Optional URL-based access (useful for tools / quick access):
-        // /api/v1/docs?u=...&p=...
-        // NOTE: still only works if SWAGGER_USER/SWAGGER_PASSWORD are set.
-        const q = (req as unknown as { query?: Record<string, unknown> }).query ?? {};
-        user = typeof q.u === 'string' ? q.u : '';
-        pass = typeof q.p === 'string' ? q.p : '';
-      }
-      if (user !== swaggerUser || pass !== swaggerPass) {
-        res.setHeader('WWW-Authenticate', 'Basic realm="DoniSend API Docs"');
-        return res.status(401).send('Invalid credentials');
-      }
-      return next();
-      },
-    );
-  } else {
-    if (isProd) {
-      // Fail-closed in production: don't expose Swagger publicly if credentials are missing.
-      expressApp.use(['/api/v1/docs', '/api/v1/docs/', '/api/docs', '/api/docs/'], (_req: Request, res: Response) =>
-        res.status(403).send('Swagger disabled (missing SWAGGER_USER/SWAGGER_PASSWORD)'),
-      );
-      logger.warn(
-        'Swagger disabled in production: missing SWAGGER_USER/SWAGGER_PASSWORD',
-      );
-    } else {
-      logger.warn(
-        'Swagger docs not protected: set SWAGGER_USER and SWAGGER_PASSWORD to enable Basic Auth',
-      );
-    }
+  if (shouldEnableSwagger) {
+    const document = SwaggerModule.createDocument(app, config);
+    // Même préfixe que les routes REST : /api/v1/docs (évite de chercher /api/docs alors que l’API est sous /api/v1)
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+      useGlobalPrefix: true,
+    });
   }
 
   expressApp.get(['/api/docs', '/api/docs/'], (_req: Request, res: Response) => {
