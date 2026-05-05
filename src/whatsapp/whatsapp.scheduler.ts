@@ -43,7 +43,9 @@ export class WhatsappScheduler {
 
       const phone = clientWhatsappPhone(tx.client);
       const platformNumber = tx.platformAccount?.accountNumber ?? "Voir dans l'app";
-      const gross = tx.grossAmount ?? tx.amountCfa;
+      const gross =
+        tx.grossAmount ??
+        (tx.request.type === RequestType.NEED_RUB ? tx.amountCfa : tx.amountRub);
       const exactStr =
         tx.request.type === RequestType.NEED_RUB
           ? formatCFA(Number(gross))
