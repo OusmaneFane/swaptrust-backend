@@ -165,10 +165,10 @@ export class TransactionsService {
       data: { transactionId },
     });
 
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: clientId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
-    });
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true } as any,
+    })) as any;
     if (user) {
       const gross =
         full.grossAmount ??
@@ -181,7 +181,7 @@ export class TransactionsService {
           : formatCFA(Number(gross));
       void this.whatsapp
         .sendClientSentConfirmed({
-          user: { name: user.name, phone: clientWhatsappPhone(user) },
+          user: { name: user.name, phone: String(clientWhatsappPhone(user)) },
           transactionId,
           amountSent: grossLabel,
         })
@@ -223,14 +223,16 @@ export class TransactionsService {
       data: { transactionId },
     });
 
-    const done = await this.prisma.transaction.findUniqueOrThrow({
+    const done = (await this.prisma.transaction.findUniqueOrThrow({
       where: { id: transactionId },
       include: {
         request: { select: { type: true } },
-        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        client: {
+          select: { name: true, phone: true, phoneMali: true, phoneRussia: true } as any,
+        },
         operator: { select: { name: true } },
       },
-    });
+    })) as any;
     const commissionPct = await this.commissions.getCommissionEffectivePercent();
     let amountSent: string;
     let amountReceived: string;
@@ -277,7 +279,7 @@ export class TransactionsService {
       .sendTransactionCompleted({
         user: {
           name: done.client.name,
-          phone: clientWhatsappPhone(done.client),
+          phone: String(clientWhatsappPhone(done.client)),
         },
         transactionId,
         amountSent,
@@ -329,14 +331,14 @@ export class TransactionsService {
       return d;
     });
 
-    const opener = await this.prisma.user.findUnique({
+    const opener = (await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
-    });
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true } as any,
+    })) as any;
     if (opener) {
       void this.whatsapp
         .sendDisputeOpened({
-          user: { name: opener.name, phone: clientWhatsappPhone(opener) },
+          user: { name: opener.name, phone: String(clientWhatsappPhone(opener)) },
           transactionId,
           disputeId: dispute.id,
         })

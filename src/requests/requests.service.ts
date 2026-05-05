@@ -84,18 +84,19 @@ export class RequestsService {
     });
 
     // WhatsApp staff: alerte rapide pour tous les ADMIN + OPERATOR
-    const staff = await this.prisma.user.findMany({
+    const staff = (await this.prisma.user.findMany({
       where: {
         role: { in: [UserRole.ADMIN, UserRole.OPERATOR] },
         isBanned: false,
       },
       select: {
         name: true,
+        phone: true,
         phoneMali: true,
         phoneRussia: true,
         countryResidence: true,
-      },
-    });
+      } as any,
+    })) as any[];
 
     const amountToSendLabel =
       currencyToSend === 'XOF'
@@ -117,7 +118,7 @@ export class RequestsService {
           .sendNewRequestStaffAlert({
             staff: {
               name: s.name,
-              phone: clientWhatsappPhone(s),
+              phone: String(clientWhatsappPhone(s)),
             },
             requestId: request.id,
             label,
@@ -129,14 +130,14 @@ export class RequestsService {
       ),
     );
 
-    const user = await this.prisma.user.findUnique({
+    const user = (await this.prisma.user.findUnique({
       where: { id: clientId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
-    });
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true } as any,
+    })) as any;
     if (user) {
       void this.whatsapp
         .sendRequestCreated({
-          user: { name: user.name, phone: clientWhatsappPhone(user) },
+          user: { name: user.name, phone: String(clientWhatsappPhone(user)) },
           requestId: request.id,
           type: request.type as 'NEED_RUB' | 'NEED_CFA',
           amountToSend: amountToSendLabel,
@@ -207,26 +208,29 @@ export class RequestsService {
             id: true,
             name: true,
             email: true,
+            phone: true,
             phoneMali: true,
             phoneRussia: true,
             kycStatus: true,
             ratingAvg: true,
-          },
+          } as any,
         },
       },
     });
   }
 
   async expirePendingRequests(): Promise<number> {
-    const toExpire = await this.prisma.exchangeRequest.findMany({
+    const toExpire = (await this.prisma.exchangeRequest.findMany({
       where: {
         status: RequestStatus.PENDING,
         expiresAt: { lte: new Date() },
       },
       include: {
-        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        client: {
+          select: { name: true, phone: true, phoneMali: true, phoneRussia: true } as any,
+        },
       },
-    });
+    })) as any[];
     if (toExpire.length === 0) return 0;
 
     await this.prisma.exchangeRequest.updateMany({
@@ -245,7 +249,7 @@ export class RequestsService {
         .sendRequestExpired({
           user: {
             name: row.client.name,
-            phone: clientWhatsappPhone(row.client),
+            phone: String(clientWhatsappPhone(row.client)),
           },
           requestId: row.id,
         })

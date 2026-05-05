@@ -40,3 +40,40 @@ export function normalizeToE164(phone: string): string | null {
 
   return null;
 }
+
+/**
+ * Normalise vers E.164 avec un indicatif pays fourni (ex: +33, 33).
+ * - Si `phone` est déjà en E.164, retourne tel quel.
+ * - Sinon si `countryCallingCode` est fourni, préfixe les chiffres nationaux.
+ * - Sinon fallback sur `normalizeToE164` (Mali/Russie).
+ */
+export function normalizeToE164WithCallingCode(
+  phone: string,
+  countryCallingCode?: string | null,
+): string | null {
+  if (!phone || typeof phone !== 'string') return null;
+  const raw = phone.trim();
+  if (!raw) return null;
+
+  const cleaned = raw.replace(/[^\d+]/g, '');
+  if (!cleaned) return null;
+
+  if (/^\+\d{8,15}$/.test(cleaned)) return cleaned;
+  if (/^00\d{8,13}$/.test(cleaned)) return `+${cleaned.slice(2)}`;
+
+  const ccRaw = (countryCallingCode ?? '').trim();
+  if (ccRaw) {
+    const cc = ccRaw.replace(/[^\d]/g, '');
+    if (!cc) return null;
+
+    const digitsOnly = cleaned.startsWith('+') ? cleaned.slice(1) : cleaned;
+    if (!/^\d+$/.test(digitsOnly)) return null;
+
+    // Si l'utilisateur saisit un 0 initial national, on le retire.
+    const national = digitsOnly.replace(/^0+/, '');
+    const full = `+${cc}${national}`;
+    return /^\+\d{8,15}$/.test(full) ? full : null;
+  }
+
+  return normalizeToE164(phone);
+}

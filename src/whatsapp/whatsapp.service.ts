@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { normalizeToE164 } from '../common/utils/phone-e164';
+import { normalizeToE164WithCallingCode } from '../common/utils/phone-e164';
 import { CommissionsService } from '../commissions/commissions.service';
 
 @Injectable()
@@ -49,12 +49,12 @@ export class WhatsappService {
     const raw = to?.trim() ?? '';
     if (!raw) {
       this.logger.warn(
-        'Numéro WhatsApp manquant — renseignez phoneMali ou phoneRussia à l’inscription (ex. +22370123456 ou 70123456)',
+        'Numéro WhatsApp manquant — renseignez `phone` (E.164) ou, en rétro-compat, `phoneMali`/`phoneRussia` à l’inscription',
       );
       return;
     }
 
-    const phone = normalizeToE164(raw);
+    const phone = normalizeToE164WithCallingCode(raw, null);
     if (!phone) {
       this.logger.warn(
         `Numéro non reconnu pour WhatsApp (saisie reçue : ${raw.length} caractères) — Mali : +223…, ou 8 chiffres nationaux (50…–99…), ou 0 puis 8 chiffres ; Russie : +7…`,

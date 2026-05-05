@@ -63,6 +63,7 @@ async function main() {
       email: 'demo@swaptrust.local',
       name: 'Demo User',
       password: userPass,
+      phone: '+22370123456',
       phoneMali: '+22370123456',
       countryResidence: 'RUSSIA',
       kycStatus: 'VERIFIED',

@@ -68,7 +68,7 @@ export class DisputesService {
 
     const opener = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true },
     });
     if (opener) {
       void this.whatsapp
@@ -150,7 +150,7 @@ export class DisputesService {
       include: {
         transaction: {
           include: {
-            client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+            client: { select: { name: true, phone: true, phoneMali: true, phoneRussia: true } },
           },
         },
       },

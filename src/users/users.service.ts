@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { maskPhone } from '../common/utils/mask-phone';
+import { normalizeToE164WithCallingCode } from '../common/utils/phone-e164';
 
 @Injectable()
 export class UsersService {
@@ -68,13 +74,46 @@ export class UsersService {
   }
 
   async updateMe(userId: number, dto: UpdateUserDto) {
+    const wantsPhoneUpdate =
+      dto.phone !== undefined ||
+      dto.phoneMali !== undefined ||
+      dto.phoneRussia !== undefined;
+
+    const phoneMain = wantsPhoneUpdate
+      ? normalizeToE164WithCallingCode(dto.phone ?? '', null) ??
+        normalizeToE164WithCallingCode(dto.phoneMali ?? '', null) ??
+        normalizeToE164WithCallingCode(dto.phoneRussia ?? '', null) ??
+        null
+      : undefined;
+
+    if (phoneMain) {
+      const existingPhone = await this.prisma.user.findFirst({
+        where: {
+          id: { not: userId },
+          OR: [
+            { phone: phoneMain },
+            { phoneMali: phoneMain },
+            { phoneRussia: phoneMain },
+          ],
+        },
+        select: { id: true },
+      });
+      if (existingPhone) {
+        throw new ConflictException('Phone number already in use');
+      }
+    }
+
     return this.prisma.user.update({
       where: { id: userId },
-      data: dto,
+      data: {
+        ...dto,
+        ...(wantsPhoneUpdate ? ({ phone: phoneMain } as any) : {}),
+      },
       select: {
         id: true,
         name: true,
         email: true,
+        phone: true,
         phoneMali: true,
         phoneRussia: true,
         countryResidence: true,
@@ -97,13 +136,16 @@ export class UsersService {
     return { deleted: true };
   }
 
-  sanitizePhones<T extends { phoneMali?: string | null; phoneRussia?: string | null }>(
+  sanitizePhones<
+    T extends { phone?: string | null; phoneMali?: string | null; phoneRussia?: string | null },
+  >(
     obj: T,
     mask: boolean,
   ): T {
     if (!mask) return obj;
     return {
       ...obj,
+      phone: obj.phone ? maskPhone(obj.phone) : obj.phone,
       phoneMali: obj.phoneMali ? maskPhone(obj.phoneMali) : obj.phoneMali,
       phoneRussia: obj.phoneRussia ? maskPhone(obj.phoneRussia) : obj.phoneRussia,
     };

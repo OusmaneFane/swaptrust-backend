@@ -154,7 +154,7 @@ export class AdminService {
       include: {
         transaction: {
           include: {
-            client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+            client: { select: { name: true, phone: true, phoneMali: true, phoneRussia: true } },
           },
         },
       },
@@ -231,7 +231,7 @@ export class AdminService {
       where: { status: RequestStatus.PENDING, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'asc' },
       include: {
-        client: { select: { id: true, email: true, name: true, phoneMali: true } },
+        client: { select: { id: true, email: true, name: true, phone: true, phoneMali: true } },
       },
     });
   }

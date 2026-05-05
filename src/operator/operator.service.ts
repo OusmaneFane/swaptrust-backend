@@ -49,6 +49,7 @@ export class OperatorService {
             id: true,
             name: true,
             email: true,
+            phone: true,
             phoneMali: true,
             phoneRussia: true,
             kycStatus: true,
@@ -199,7 +200,7 @@ export class OperatorService {
       include: {
         request: true,
         platformAccount: true,
-        client: { select: { id: true, name: true, phoneMali: true, phoneRussia: true } },
+        client: { select: { id: true, name: true, phone: true, phoneMali: true, phoneRussia: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -214,6 +215,7 @@ export class OperatorService {
           select: {
             id: true,
             name: true,
+            phone: true,
             phoneMali: true,
             phoneRussia: true,
             ratingAvg: true,
@@ -283,7 +285,7 @@ export class OperatorService {
     const t = await this.prisma.transaction.findUniqueOrThrow({
       where: { id: transactionId },
       include: {
-        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        client: { select: { name: true, phone: true, phoneMali: true, phoneRussia: true } },
         request: { select: { type: true } },
       },
     });
@@ -429,7 +431,7 @@ export class OperatorService {
       where: { id: transactionId },
       include: {
         request: true,
-        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        client: { select: { name: true, phone: true, phoneMali: true, phoneRussia: true } },
       },
     });
     this.assertAssignedOperator(t.operatorId, operatorId, role);

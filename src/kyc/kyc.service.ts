@@ -58,7 +58,7 @@ export class KycService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true },
     });
     if (user) {
       void this.whatsapp
@@ -100,7 +100,7 @@ export class KycService {
     ]);
     const user = await this.prisma.user.findUnique({
       where: { id: docUserId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true },
     });
     if (user) {
       void this.whatsapp
@@ -130,7 +130,7 @@ export class KycService {
     ]);
     const user = await this.prisma.user.findUnique({
       where: { id: docUserId },
-      select: { name: true, phoneMali: true, phoneRussia: true },
+      select: { name: true, phone: true, phoneMali: true, phoneRussia: true },
     });
     if (user) {
       void this.whatsapp

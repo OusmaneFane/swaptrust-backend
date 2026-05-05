@@ -72,6 +72,8 @@ model User {
   name                 String
   email                String           @unique
   password             String
+  /// Numéro principal du client au format E.164 (ex: +33612345678)
+  phone                String?          @unique
   phoneMali            String?
   phoneRussia          String?
   countryResidence     CountryResidence @default(MALI)

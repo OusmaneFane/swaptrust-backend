@@ -23,25 +23,27 @@ export class WhatsappScheduler {
   @Cron(CronExpression.EVERY_HOUR)
   async sendPaymentReminders(): Promise<void> {
     const threshold = new Date(Date.now() - STALE_MS);
-    const rows = await this.prisma.transaction.findMany({
+    const rows = (await this.prisma.transaction.findMany({
       where: {
         status: TransactionStatus.INITIATED,
         takenAt: { lte: threshold },
         expiresAt: { gt: new Date() },
       },
       include: {
-        client: { select: { name: true, phoneMali: true, phoneRussia: true } },
+        client: {
+          select: { name: true, phone: true, phoneMali: true, phoneRussia: true } as any,
+        },
         platformAccount: true,
         request: { select: { type: true } },
       },
-    });
+    })) as any[];
 
     for (const tx of rows) {
       const key = `${REMINDER_REDIS_PREFIX}${tx.id}`;
       const already = await this.redis.get(key);
       if (already) continue;
 
-      const phone = clientWhatsappPhone(tx.client);
+      const phone = String(clientWhatsappPhone(tx.client));
       const platformNumber = tx.platformAccount?.accountNumber ?? "Voir dans l'app";
       const gross =
         tx.grossAmount ??

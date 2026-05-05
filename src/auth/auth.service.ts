@@ -15,6 +15,7 @@ import { RedisService } from '../redis/redis.service';
 import { SmsService } from '../sms/sms.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { clientWhatsappPhone } from '../common/utils/client-whatsapp-phone';
+import { normalizeToE164WithCallingCode } from '../common/utils/phone-e164';
 
 const OTP_TTL_SEC = 300;
 const OTP_FALLBACK = new Map<string, { code: string; exp: number }>();
@@ -146,11 +147,38 @@ export class AuthService {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('Email already in use');
     const password = await bcrypt.hash(dto.password, 12);
+
+    // Nouveau flux: `phone` + `countryCallingCode` pour supporter tous pays.
+    // Rétro-compat: si `phone` absent, on garde phoneMali/phoneRussia.
+    const phoneMain =
+      normalizeToE164WithCallingCode(dto.phone ?? '', dto.countryCallingCode) ??
+      normalizeToE164WithCallingCode(dto.phoneMali ?? '', null) ??
+      normalizeToE164WithCallingCode(dto.phoneRussia ?? '', null) ??
+      null;
+
+    if (phoneMain) {
+      const existingPhone = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone: phoneMain },
+            // Rétro-compat: couvrir les anciennes colonnes si elles contiennent un E.164 identique
+            { phoneMali: phoneMain },
+            { phoneRussia: phoneMain },
+          ],
+        },
+        select: { id: true },
+      });
+      if (existingPhone) {
+        throw new ConflictException('Phone number already in use');
+      }
+    }
+
     const user = await this.prisma.user.create({
       data: {
         name: dto.name,
         email: dto.email,
         password,
+        phone: phoneMain,
         phoneMali: dto.phoneMali,
         phoneRussia: dto.phoneRussia,
         countryResidence: dto.countryResidence,
@@ -242,6 +270,7 @@ export class AuthService {
         id: true,
         name: true,
         email: true,
+        phone: true,
         phoneMali: true,
         phoneRussia: true,
         countryResidence: true,

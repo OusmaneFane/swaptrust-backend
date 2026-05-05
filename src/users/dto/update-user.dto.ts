@@ -19,6 +19,13 @@ export class UpdateUserDto {
   @IsMobilePhone()
   phoneRussia?: string;
 
+  @ApiPropertyOptional({
+    description: 'Numéro principal au format international (E.164), tous pays.',
+  })
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
   @ApiPropertyOptional({ enum: CountryResidence })
   @IsOptional()
   @IsEnum(CountryResidence)
